@@ -71,14 +71,6 @@ std::string project_file(const String& path) {
     return p;
 }
 
-// A layer path that names user:// keeps only that part: Baker joins a project file's
-// directory onto it, which is not the root of user:// (requirements/0002).
-baker::Symbol layer_path(baker::Symbol joined) {
-    const std::string_view p = joined.str();
-    const size_t at = p.find("user:/");
-    return at == std::string_view::npos ? joined : baker::Symbol(p.substr(at));
-}
-
 }  // namespace
 
 BakerRuntime::BakerRuntime() = default;
@@ -146,6 +138,7 @@ void BakerRuntime::_exit_tree() {
     }
     config_.reset();
     watched_.clear();
+    watched_epoch_ = kNoEpoch;
     singleton_ = nullptr;
 }
 
@@ -155,14 +148,11 @@ godot::Error BakerRuntime::open(const String& project_path) {
     const baker::LoadSession::Reader read = baker_godot::reader();
     auto project = baker::read_project(project_file(project_path), read);
     if (!project) return fail(project.error());
-    std::vector<baker::ProjectLayer> layers(project->layers.begin(), project->layers.end());
-    for (baker::ProjectLayer& layer : layers) layer.path = layer_path(layer.path);
-    project->layers =
-        baker::List<baker::ProjectLayer>(std::span<const baker::ProjectLayer>(layers));
 
     // A Config binds the global tweak registry: close the old one before making another.
     config_.reset();
     watched_.clear();
+    watched_epoch_ = kNoEpoch;
     auto config = std::make_unique<baker::Config>();
     config->session().set_reader(read);
     config->set_writer(
@@ -172,10 +162,6 @@ godot::Error BakerRuntime::open(const String& project_path) {
     });
     if (auto r = baker::open_project(*config, *project); !r) return fail(r.error());
     config_ = std::move(config);
-    for (const baker::ProjectLayer& layer : project->layers) {
-        const std::string path(layer.path.str());
-        watched_.push_back({path, file_stamp(path)});
-    }
     changed();
     return godot::OK;
 }
@@ -183,15 +169,36 @@ godot::Error BakerRuntime::open(const String& project_path) {
 void BakerRuntime::_process(double delta) {
     if constexpr (!baker::kShipping) {
         if (!config_ || !watch_ || !godot::OS::get_singleton()->is_debug_build()) return;
-        since_full_ += delta;
+        (void)delta;
         poll();
     }
 }
 
-// Each frame, one stat per layer file: a changed one reloads, with its write time as the
-// edit's origin. Files reached by #include are not known to the host (requirements/0001),
-// so once a second a full reload re-reads everything to find them.
+// The files the stack was read from, includes and files looked for and missed too. A file
+// already watched keeps its stamp, so an edit made since it was taken is still seen; a new
+// one is stamped now. Remade as soon as the list changes (stack_files_epoch).
+void BakerRuntime::watch_files() {
+    if constexpr (!baker::kShipping) {
+        if (!config_ || config_->stack_files_epoch() == watched_epoch_) return;
+        std::vector<Watched> old = std::move(watched_);
+        watched_.clear();
+        for (const baker::StackFile& f : config_->stack_files()) {
+            std::string path(f.path.str());
+            FileStamp stamp;
+            bool known = false;
+            for (const Watched& w : old)
+                if (w.path == path) stamp = w.stamp, known = true;
+            if (!known) stamp = file_stamp(path);
+            watched_.push_back({std::move(path), stamp});
+        }
+        watched_epoch_ = config_->stack_files_epoch();
+    }
+}
+
+// Each frame, one stat per file the stack was read from: a changed one reloads, with its
+// write time as the edit's origin.
 void BakerRuntime::poll() {
+    watch_files();
     bool changed_on_disk = false;
     int64_t newest = 0;
     for (Watched& w : watched_) {
@@ -201,11 +208,9 @@ void BakerRuntime::poll() {
         if (s.exists && (!changed_on_disk || s.time_ns > newest)) newest = s.time_ns;
         changed_on_disk = true;
     }
-    if (!changed_on_disk && since_full_ < 1.0) return;
-    since_full_ = 0;
-    const baker::ReloadRequest request{
-        .trigger = changed_on_disk ? "watcher" : "poll",
-        .origin_ns = changed_on_disk && newest ? steady_from_file_time(newest) : 0};
+    if (!changed_on_disk) return;
+    const baker::ReloadRequest request{.trigger = "watcher",
+                                       .origin_ns = newest ? steady_from_file_time(newest) : 0};
     auto r = config_->reload(request);
     if (!r)
         (void)fail(r.error());
@@ -226,6 +231,7 @@ bool BakerRuntime::reload() {
 }
 
 void BakerRuntime::changed() {
+    watch_files();
     cache_.clear();
     emit_signal("changed");
 }

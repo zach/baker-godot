@@ -96,6 +96,7 @@ private:
     void changed();
     godot::Error fail(const baker::Error& error);
     void present();
+    void watch_files();
     void poll();
 
     static BakerRuntime* singleton_;
@@ -110,7 +111,8 @@ private:
         FileStamp stamp;
     };
     std::vector<Watched> watched_;
-    double since_full_ = 0;  // seconds since reload() last re-read every file
+    static constexpr uint64_t kNoEpoch = ~uint64_t(0);
+    uint64_t watched_epoch_ = kNoEpoch;  // stack_files_epoch() when watched_ was made
 };
 
 }  // namespace baker_godot

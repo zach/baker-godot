@@ -11,8 +11,8 @@
 
 namespace baker_godot {
 
-// The path Godot opens for one Baker names: "data/a.dta" is res://data/a.dta. Baker
-// normalizes "user://a" to "user:/a" (requirements/0002), which is read back here.
+// The path Godot opens for one Baker names: "data/a.dta" is res://data/a.dta; a path with a
+// scheme (res://, user://) or an absolute one is as written.
 [[nodiscard]] std::string godot_path(std::string_view path);
 
 // Reads through Godot's file access.

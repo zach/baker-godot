@@ -1,5 +1,8 @@
 # 0002: Paths with a scheme, such as `user://`, kept as written
 
+**Shipped** in baker-dev eaba0d7 (D179: a path with a scheme is absolute and kept as written); this integration uses it and has dropped the
+workaround below.
+
 ## The need
 
 A path that begins with a scheme (`name://`) is kept exactly as written everywhere Baker

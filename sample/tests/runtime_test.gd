@@ -98,6 +98,30 @@ func run() -> void:
 	var stats := Baker.loop_stats()
 	check(stats["reloads"] >= 1, "loop_stats counts reloads: %s" % [stats])
 
+	# An edit to an included file is seen too: the watcher follows what the stack read.
+	f = FileAccess.open("user://baker/inc.dta", FileAccess.WRITE)
+	f.store_string("(player (jump (height 105)))\n")
+	f.close()
+	f = FileAccess.open(LOCAL, FileAccess.WRITE)
+	f.store_string("#include \"inc.dta\"\n")
+	f.close()
+	for i in 10:
+		await get_tree().process_frame
+		if player.jump_height == 105.0:
+			break
+	check(player.jump_height == 105.0, "local.dta includes inc.dta: %s" % player.jump_height)
+	check(Baker.source("player.jump.height")["file"] == "user://baker/inc.dta",
+		"source() names the include as written: %s" % [Baker.source("player.jump.height")])
+	f = FileAccess.open("user://baker/inc.dta", FileAccess.WRITE)
+	f.store_string("(player (jump (height 104)))\n")
+	f.close()
+	for i in 10:
+		await get_tree().process_frame
+		if player.jump_height == 104.0:
+			break
+	check(player.jump_height == 104.0, "an edit to the included file reloads within frames")
+	DirAccess.remove_absolute("user://baker/inc.dta")
+
 	# A bound node gone: its tweaks go with it.
 	player.queue_free()
 	await get_tree().process_frame

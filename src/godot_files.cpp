@@ -24,13 +24,9 @@ bool starts_with(std::string_view s, std::string_view prefix) {
 }  // namespace
 
 std::string godot_path(std::string_view path) {
-    for (std::string_view scheme : {"res:", "user:"}) {
-        if (!starts_with(path, scheme)) continue;
-        std::string_view rest = path.substr(scheme.size());
-        while (starts_with(rest, "/")) rest.remove_prefix(1);
-        return std::string(scheme) + "//" + std::string(rest);
-    }
-    if (starts_with(path, "/") || (path.size() > 1 && path[1] == ':')) return std::string(path);
+    if (path.find("://") != std::string_view::npos || starts_with(path, "/") ||
+        (path.size() > 1 && path[1] == ':'))
+        return std::string(path);
     return "res://" + std::string(path);
 }
 

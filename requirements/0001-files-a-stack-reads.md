@@ -1,5 +1,8 @@
 # 0001: The files a Config's stack was read from, for a host's own watcher
 
+**Shipped** in baker-dev eaba0d7 (D180: `Config::stack_files()` and `stack_files_epoch()`); this integration uses it and has dropped the
+workaround below.
+
 ## The need
 
 A host can ask a Config for every file its layers were read from: each layer's own file
