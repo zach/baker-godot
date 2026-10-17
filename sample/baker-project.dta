@@ -1,0 +1,10 @@
+; The layer stack the game and every tool open: bottom to top.
+(project
+   (layers
+      (default "data/tuning.dta")
+      ; Your own tuning, kept out of version control in Godot's user:// directory.
+      (local "user://baker/local.dta" optional)
+      ; What an agent tunes, for review.
+      (agent "data/agent.dta" optional)
+      ; Experiments: toggled while playing (F1).
+      (floaty "data/experiments/floaty.dta" disabled)))
