@@ -23,3 +23,7 @@ Baker="*res://addons/baker/baker.gd"
 window/size/viewport_width=960
 window/size/viewport_height=540
 window/stretch/mode="canvas_items"
+
+[editor_plugins]
+
+enabled=PackedStringArray("res://addons/baker/plugin.cfg")

@@ -10,6 +10,12 @@
 //
 // Properties of scene nodes are bound with a BakerBinding instead, which costs nothing per
 // frame.
+//
+// Under the editor's debugger, the game sends its session (the unsaved values, the layers'
+// states, the bindings) to the editor whenever it changes, as the message baker:session,
+// and takes baker:toggle [layer, enabled], baker:kept [path] and baker:discard [path]. In
+// the editor, a BakerRuntime opened by the plugin may write into the project
+// (project_writes), so that "Keep" writes a value back from the editor process.
 
 #include "godot_files.hpp"
 
@@ -75,8 +81,19 @@ public:
     [[nodiscard]] godot::PackedStringArray unsaved() const;
     // [{path, before, after, layer, file, line, fate}], oldest first.
     [[nodiscard]] godot::Array journal() const;
+    // Writes the value into the file of the highest enabled layer that supplies it,
+    // replacing only its tokens: comments and formatting stay, and the diff is one line.
+    godot::Error write_back(const godot::String& path);
     // Writes the value into a layer's file: for the game, a user:// layer such as `local`.
     godot::Error write_back_to(const godot::String& path, const godot::String& layer);
+    // What the last write wrote: [{file, godot_path, line}].
+    [[nodiscard]] godot::Array get_last_written() const { return last_written_; }
+    // What a layer changes: [{path, value, below, file, line, shadowed}].
+    [[nodiscard]] godot::Array layer_effect(const godot::String& layer) const;
+    // What the editor is sent: {layers, unsaved: [{path, value, before, layer, file, line}],
+    // bindings: [{object_id, node, property, path}]}. `layer`, `file` and `line` are where
+    // the value came from before it was tuned: where Keep writes it.
+    [[nodiscard]] godot::Dictionary session() const;
 
     // --- Telemetry. ---
     // {reloads, unchanged, failures, files: [...], layers: [...]}, times in milliseconds.
@@ -87,6 +104,9 @@ public:
     [[nodiscard]] godot::String get_project_path() const { return project_path_; }
     void set_watch(bool watch) { watch_ = watch; }
     [[nodiscard]] bool get_watch() const { return watch_; }
+    // Writes into res:// allowed: only in the editor, never in a game.
+    void set_project_writes(bool writes);
+    [[nodiscard]] bool get_project_writes() const { return project_writes_; }
 
 protected:
     static void _bind_methods();
@@ -98,6 +118,8 @@ private:
     void present();
     void watch_files();
     void poll();
+    godot::Error wrote(const baker::WriteReport& report);
+    bool debugger_message(const godot::String& message, const godot::Array& data);
 
     static BakerRuntime* singleton_;
     std::unique_ptr<baker::Config> config_;
@@ -105,6 +127,10 @@ private:
     godot::String last_error_;
     godot::Dictionary cache_;  // tweak(): path -> value
     bool watch_ = true;        // poll the layers' files (debug builds)
+    bool project_writes_ = false;
+    bool capturing_ = false;      // registered with the editor's debugger
+    bool session_dirty_ = false;  // the session changed since it was last sent
+    godot::Array last_written_;
 
     struct Watched {
         std::string path;

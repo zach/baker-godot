@@ -92,7 +92,8 @@ struct RawValues {
 // `values` read as `type`, if they convert; nil otherwise. NIL: any type, by the values:
 // one node is its own value, several are an Array.
 [[nodiscard]] godot::Variant to_variant(const baker::Values& values, godot::Variant::Type type);
-// `value` as data: false for a type data cannot hold.
+// `value` as data: false for a type data cannot hold. An Array is a value of several
+// nodes, each a scalar.
 [[nodiscard]] bool to_values(const godot::Variant& value, baker::ValueList& out);
 
 [[nodiscard]] godot::String to_godot(std::string_view text);

@@ -77,6 +77,15 @@ bool to_values(const Variant& value, baker::ValueList& out) {
         case Variant::VECTOR2: baker::Convert<godot::Vector2>::to(value, out); return true;
         case Variant::VECTOR3: baker::Convert<godot::Vector3>::to(value, out); return true;
         case Variant::COLOR: baker::Convert<godot::Color>::to(value, out); return true;
+        case Variant::ARRAY: {
+            // A value of several nodes, as to_variant gives it: each a node of its own.
+            const godot::Array a = value;
+            for (int64_t i = 0; i < a.size(); ++i) {
+                const Variant& v = a[i];
+                if (v.get_type() == Variant::ARRAY || !to_values(v, out)) return false;
+            }
+            return !a.is_empty();
+        }
         default: return false;
     }
 }

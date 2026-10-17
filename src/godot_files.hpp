@@ -18,9 +18,9 @@ namespace baker_godot {
 // Reads through Godot's file access.
 [[nodiscard]] baker::LoadSession::Reader reader();
 
-// Writes `text` to `path`, creating its directory. Only user:// paths: a game never writes
-// into the project, which the editor owns (plan step 2 writes from the editor process).
-[[nodiscard]] bool write_user_file(std::string_view path, std::string_view text);
+// Writes `text` to `path`, creating its directory. A user:// path, or with `project` (the
+// editor's own writes) any: a game never writes into the project, which the editor owns.
+[[nodiscard]] bool write_file(std::string_view path, std::string_view text, bool project);
 
 // What tells a file's versions apart without reading it: when it was last written, in the
 // file system's clock, and its size. Two writes in one tick of a coarse file clock differ

@@ -1,11 +1,13 @@
 #include "baker_runtime.hpp"
 
+#include "baker_binding.hpp"
 #include "godot_files.hpp"
 #include "values.hpp"
 
 #include <baker/error.hpp>
 
 #include <godot_cpp/classes/engine.hpp>
+#include <godot_cpp/classes/engine_debugger.hpp>
 #include <godot_cpp/classes/file_access.hpp>
 #include <godot_cpp/classes/os.hpp>
 #include <godot_cpp/classes/rendering_server.hpp>
@@ -96,6 +98,13 @@ void BakerRuntime::_bind_methods() {
                          DEFVAL(String()));
     ClassDB::bind_method(D_METHOD("unsaved"), &BakerRuntime::unsaved);
     ClassDB::bind_method(D_METHOD("journal"), &BakerRuntime::journal);
+    ClassDB::bind_method(D_METHOD("write_back", "path"), &BakerRuntime::write_back);
+    ClassDB::bind_method(D_METHOD("get_last_written"), &BakerRuntime::get_last_written);
+    ClassDB::bind_method(D_METHOD("layer_effect", "layer"), &BakerRuntime::layer_effect);
+    ClassDB::bind_method(D_METHOD("session"), &BakerRuntime::session);
+    ClassDB::bind_method(D_METHOD("set_project_writes", "writes"),
+                         &BakerRuntime::set_project_writes);
+    ClassDB::bind_method(D_METHOD("get_project_writes"), &BakerRuntime::get_project_writes);
     ClassDB::bind_method(D_METHOD("write_back_to", "path", "layer"), &BakerRuntime::write_back_to);
     ClassDB::bind_method(D_METHOD("loop_stats"), &BakerRuntime::loop_stats);
     ClassDB::bind_method(D_METHOD("get_last_error"), &BakerRuntime::get_last_error);
@@ -108,6 +117,8 @@ void BakerRuntime::_bind_methods() {
         godot::PropertyInfo(Variant::STRING, "project_path", godot::PROPERTY_HINT_FILE, "*.dta"),
         "set_project_path", "get_project_path");
     ADD_PROPERTY(godot::PropertyInfo(Variant::BOOL, "watch"), "set_watch", "get_watch");
+    ADD_PROPERTY(godot::PropertyInfo(Variant::BOOL, "project_writes"), "set_project_writes",
+                 "get_project_writes");
     // After every change of the data: a reload, a layer toggled, a live edit.
     ADD_SIGNAL(godot::MethodInfo("changed"));
 }
@@ -125,6 +136,13 @@ void BakerRuntime::_enter_tree() {
         // Edit-to-see ends when the frame showing the edit is drawn.
         godot::RenderingServer::get_singleton()->connect("frame_post_draw",
                                                          callable_mp(this, &BakerRuntime::present));
+        godot::EngineDebugger* debugger = godot::EngineDebugger::get_singleton();
+        if (debugger->is_active() && !debugger->has_capture("baker")) {
+            debugger->register_message_capture("baker",
+                                               callable_mp(this, &BakerRuntime::debugger_message));
+            capturing_ = true;
+            session_dirty_ = true;
+        }
     }
 }
 
@@ -135,6 +153,8 @@ void BakerRuntime::_exit_tree() {
         const godot::Callable present = callable_mp(this, &BakerRuntime::present);
         if (rs->is_connected("frame_post_draw", present))
             rs->disconnect("frame_post_draw", present);
+        if (capturing_) godot::EngineDebugger::get_singleton()->unregister_message_capture("baker");
+        capturing_ = false;
     }
     config_.reset();
     watched_.clear();
@@ -155,8 +175,9 @@ godot::Error BakerRuntime::open(const String& project_path) {
     watched_epoch_ = kNoEpoch;
     auto config = std::make_unique<baker::Config>();
     config->session().set_reader(read);
-    config->set_writer(
-        [](std::string_view path, std::string_view text) { return write_user_file(path, text); });
+    config->set_writer([this](std::string_view path, std::string_view text) {
+        return write_file(path, text, project_writes_);
+    });
     config->set_warning_handler([](const baker::Error& e) {
         godot::UtilityFunctions::push_warning(to_godot(baker::to_string(e)));
     });
@@ -166,12 +187,39 @@ godot::Error BakerRuntime::open(const String& project_path) {
     return godot::OK;
 }
 
-void BakerRuntime::_process(double delta) {
+void BakerRuntime::_process(double) {
     if constexpr (!baker::kShipping) {
-        if (!config_ || !watch_ || !godot::OS::get_singleton()->is_debug_build()) return;
-        (void)delta;
-        poll();
+        if (!config_) return;
+        if (watch_ && godot::OS::get_singleton()->is_debug_build()) poll();
+        if (capturing_ && session_dirty_) {
+            session_dirty_ = false;
+            godot::EngineDebugger::get_singleton()->send_message("baker:session",
+                                                                 Array::make(session()));
+        }
     }
+}
+
+// The editor's messages: the prefix "baker:" is taken off before they reach here.
+bool BakerRuntime::debugger_message(const String& message, const Array& data) {
+    if (message == "toggle" && data.size() == 2) {
+        (void)set_layer_enabled(data[0], data[1]);
+        return true;
+    }
+    if ((message == "kept" || message == "discard") && data.size() == 1) {
+        // Kept: the file now holds the value, which the watcher reloads; discarded: the
+        // value goes back to the files'. Either way scratch lets go of it.
+        (void)clear_scratch(data[0]);
+        return true;
+    }
+    return false;
+}
+
+void BakerRuntime::set_project_writes(bool writes) {
+    if (writes && !godot::Engine::get_singleton()->is_editor_hint()) {
+        godot::UtilityFunctions::push_error("Baker: a game never writes into the project");
+        return;
+    }
+    project_writes_ = writes;
 }
 
 // The files the stack was read from, includes and files looked for and missed too. A file
@@ -232,6 +280,7 @@ bool BakerRuntime::reload() {
 
 void BakerRuntime::changed() {
     watch_files();
+    session_dirty_ = true;
     cache_.clear();
     emit_signal("changed");
 }
@@ -360,12 +409,83 @@ Array BakerRuntime::journal() const {
     return out;
 }
 
+godot::Error BakerRuntime::write_back(const String& path) {
+    if (!config_) return godot::ERR_UNCONFIGURED;
+    last_written_.clear();
+    auto r = config_->write_back(baker::Path(to_std(path)));
+    if (!r) return fail(r.error());
+    return wrote(*r);
+}
+
 godot::Error BakerRuntime::write_back_to(const String& path, const String& layer) {
     if (!config_) return godot::ERR_UNCONFIGURED;
+    last_written_.clear();
     auto r = config_->write_back_to(baker::Path(to_std(path)), to_std(layer));
     if (!r) return fail(r.error());
+    return wrote(*r);
+}
+
+godot::Error BakerRuntime::wrote(const baker::WriteReport& report) {
+    for (const baker::WrittenLine& w : report.written) {
+        Dictionary d;
+        d["file"] = name_of(w.file);
+        d["godot_path"] = to_godot(godot_path(w.file.str()));
+        d["line"] = w.line;
+        last_written_.push_back(d);
+    }
     changed();
     return godot::OK;
+}
+
+Array BakerRuntime::layer_effect(const String& layer) const {
+    Array out;
+    if (!config_) return out;
+    auto entries = config_->layer_effect(to_std(layer));
+    if (!entries) return out;
+    for (const baker::LayerEffectEntry& e : *entries) {
+        Dictionary d;
+        put_source(d, e.source);
+        d["path"] = name_of(e.path);
+        d["value"] = to_variant(e.value);
+        d["below"] = e.below ? to_variant(*e.below) : Variant();
+        d["shadowed"] = e.shadowed;
+        out.push_back(d);
+    }
+    return out;
+}
+
+Dictionary BakerRuntime::session() const {
+    Dictionary out;
+    out["layers"] = get_layers();
+    Array unsaved;
+    if (config_) {
+        // For each unsaved path, its oldest journal entry since it was last written or
+        // reverted: the value before tuning, and where it came from.
+        Dictionary first;
+        config_->journal([&](const baker::JournalEntry& e) {
+            const String path = name_of(e.path);
+            if (e.fate == baker::EditFate::Written || e.fate == baker::EditFate::Reverted) {
+                first.erase(path);
+                return;
+            }
+            if (first.has(path)) return;
+            Dictionary d;
+            put_source(d, e.source);
+            d["path"] = path;
+            d["before"] = journal_value(e.before, e.before_count);
+            first[path] = d;
+        });
+        for (baker::Symbol path : config_->unsaved()) {
+            const String p = name_of(path);
+            Dictionary d = first.has(p) ? Dictionary(first[p]) : Dictionary();
+            d["path"] = p;
+            d["value"] = get_value(p, Variant());
+            unsaved.push_back(d);
+        }
+    }
+    out["unsaved"] = unsaved;
+    out["bindings"] = BakerBinding::all_bindings();
+    return out;
 }
 
 Dictionary BakerRuntime::loop_stats() const {

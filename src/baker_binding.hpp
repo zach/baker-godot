@@ -12,8 +12,15 @@
 // scene's value standing.
 //
 // Types: bool, int, float, String, StringName, Vector2, Vector3, Color.
+//
+// Under the editor's debugger, a value set on a bound property from outside (the remote
+// inspector) becomes a live edit of its path: in scratch, unsaved, in the journal. It is
+// noticed by comparing each bound property with what it was last given, ten times a second,
+// and only while a debugger is attached; a game run on its own never compares. Bound
+// properties are tunables: code that changes one at runtime is taken for a tuner.
 
 #include <godot_cpp/classes/node.hpp>
+#include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/string_name.hpp>
 
@@ -31,6 +38,7 @@ public:
 
     void _ready() override;
     void _exit_tree() override;
+    void _process(double delta) override;
 
     void set_bindings(const godot::Dictionary& bindings);
     [[nodiscard]] godot::Dictionary get_bindings() const { return bindings_; }
@@ -38,6 +46,11 @@ public:
     [[nodiscard]] godot::Dictionary sources() const;
     // Drops the bindings and binds again, as on _ready.
     void rebind();
+    // Makes a live edit of each bound property whose value changed from outside since it
+    // was last assigned; the number made.
+    int64_t capture();
+    // Every bound property of every binding: [{object_id, node, property, path}].
+    [[nodiscard]] static godot::Array all_bindings();
 
     // One bound property; defined in the .cpp.
     struct Bound;
@@ -48,8 +61,12 @@ protected:
 private:
     void unbind();
 
+    static constexpr double kCaptureInterval = 0.1;  // seconds
+
     godot::Dictionary bindings_;  // property -> path
     std::vector<std::unique_ptr<Bound>> bound_;
+    double since_capture_ = 0;
+    static std::vector<BakerBinding*> live_;  // the bindings with bound properties
 };
 
 }  // namespace baker_godot

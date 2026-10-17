@@ -41,9 +41,9 @@ baker::LoadSession::Reader reader() {
     };
 }
 
-bool write_user_file(std::string_view path, std::string_view text) {
+bool write_file(std::string_view path, std::string_view text, bool project) {
     const std::string target = godot_path(path);
-    if (!starts_with(target, "user://")) return false;
+    if (!project && !starts_with(target, "user://")) return false;
     const godot::String p = to_godot(target);
     if (godot::DirAccess::make_dir_recursive_absolute(p.get_base_dir()) != godot::OK) return false;
     const godot::Ref<godot::FileAccess> f = godot::FileAccess::open(p, godot::FileAccess::WRITE);

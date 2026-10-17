@@ -120,7 +120,31 @@ func run() -> void:
 		if player.jump_height == 104.0:
 			break
 	check(player.jump_height == 104.0, "an edit to the included file reloads within frames")
+	f = FileAccess.open(LOCAL, FileAccess.WRITE)
+	f.store_string("")
+	f.close()
+	Baker.reload()
 	DirAccess.remove_absolute("user://baker/inc.dta")
+
+	# A property set from outside, as the remote inspector sets it, becomes a live edit.
+	player.run_speed = 250.0
+	check(binding.capture() == 1, "capture() makes a live edit of a property changed outside")
+	check(Baker.get_value("player.run.speed", 0.0) == 250.0 and "player/run/speed" in Baker.unsaved(),
+		"it is in scratch, unsaved: %s" % [Baker.unsaved()])
+	check(binding.capture() == 0, "and is captured once")
+	var session := Baker.session()
+	var tuned: Array = session["unsaved"].filter(func(e): return e["path"] == "player/run/speed")
+	check(tuned.size() == 1 and tuned[0]["value"] == 250.0 and tuned[0]["before"] == 220
+		and tuned[0]["file"] == "data/tuning.dta" and tuned[0]["line"] == 5,
+		"session() gives its value, what it was, and where it came from: %s" % [tuned])
+	var bound: Array = session["bindings"].filter(func(b): return b["property"] == "jump_height")
+	check(bound.size() == 1 and bound[0]["object_id"] == player.get_instance_id()
+		and bound[0]["path"] == "player.jump.height",
+		"session() lists the bindings with their objects: %s" % [bound])
+	check(session["layers"].size() == 5, "session() gives the layers")
+	Baker.clear_scratch("player/run/speed")
+	check(player.run_speed == 220.0, "discarded, the property returns to the data's value")
+	check(binding.capture() == 0, "which is not taken for an edit")
 
 	# A bound node gone: its tweaks go with it.
 	player.queue_free()

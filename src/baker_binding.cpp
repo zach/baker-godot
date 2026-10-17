@@ -1,16 +1,19 @@
 #include "baker_binding.hpp"
 
+#include "baker_runtime.hpp"
 #include "values.hpp"
 
 #include <baker/config.hpp>
 #include <baker/tweak.hpp>
 
 #include <godot_cpp/classes/engine.hpp>
+#include <godot_cpp/classes/engine_debugger.hpp>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 
 namespace baker_godot {
 
+using godot::Array;
 using godot::Dictionary;
 using godot::String;
 using godot::Variant;
@@ -23,8 +26,12 @@ struct BakerBinding::Bound {
 
     godot::Node* target = nullptr;
     godot::StringName property;
+    godot::Variant last;  // what the property was last given, or seen to hold
 
-    void assign() const { target->set(property, value()); }
+    void assign() {
+        last = value();
+        target->set(property, last);
+    }
 };
 
 namespace {
@@ -67,8 +74,12 @@ std::unique_ptr<BakerBinding::Bound> make_bound(baker::Symbol path, const Varian
 
 }  // namespace
 
+std::vector<BakerBinding*> BakerBinding::live_;
+
 BakerBinding::BakerBinding() = default;
-BakerBinding::~BakerBinding() = default;
+BakerBinding::~BakerBinding() {
+    unbind();
+}
 
 void BakerBinding::_bind_methods() {
     using godot::ClassDB;
@@ -77,6 +88,7 @@ void BakerBinding::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_bindings"), &BakerBinding::get_bindings);
     ClassDB::bind_method(D_METHOD("sources"), &BakerBinding::sources);
     ClassDB::bind_method(D_METHOD("rebind"), &BakerBinding::rebind);
+    ClassDB::bind_method(D_METHOD("capture"), &BakerBinding::capture);
     ADD_PROPERTY(godot::PropertyInfo(Variant::DICTIONARY, "bindings",
                                      godot::PROPERTY_HINT_TYPE_STRING, "String:String"),
                  "set_bindings", "get_bindings");
@@ -90,6 +102,47 @@ void BakerBinding::set_bindings(const Dictionary& bindings) {
 void BakerBinding::_ready() {
     if (godot::Engine::get_singleton()->is_editor_hint()) return;
     rebind();
+    if constexpr (!baker::kShipping)
+        set_process(godot::EngineDebugger::get_singleton()->is_active());
+}
+
+// Under the editor's debugger only: a few times a second, a property the remote inspector
+// changed becomes a live edit.
+void BakerBinding::_process(double delta) {
+    if constexpr (!baker::kShipping) {
+        since_capture_ += delta;
+        if (since_capture_ < kCaptureInterval) return;
+        since_capture_ = 0;
+        capture();
+    }
+}
+
+int64_t BakerBinding::capture() {
+    BakerRuntime* runtime = BakerRuntime::get_singleton();
+    if (!runtime || !runtime->is_open()) return 0;
+    int64_t edits = 0;
+    for (const std::unique_ptr<Bound>& b : bound_) {
+        const Variant now = b->target->get(b->property);
+        if (now == b->last) continue;
+        b->last = now;
+        if (runtime->set_value(to_godot(b->tweak().path()), now) == godot::OK) ++edits;
+    }
+    return edits;
+}
+
+Array BakerBinding::all_bindings() {
+    Array out;
+    for (const BakerBinding* binding : live_) {
+        for (const std::unique_ptr<Bound>& b : binding->bound_) {
+            Dictionary d;
+            d["object_id"] = int64_t(b->target->get_instance_id());
+            d["node"] = String(b->target->get_path());
+            d["property"] = b->property;
+            d["path"] = to_godot(b->tweak().path());
+            out.push_back(d);
+        }
+    }
+    return out;
 }
 
 void BakerBinding::_exit_tree() {
@@ -98,6 +151,7 @@ void BakerBinding::_exit_tree() {
 
 void BakerBinding::unbind() {
     bound_.clear();
+    std::erase(live_, this);
 }
 
 void BakerBinding::rebind() {
@@ -133,9 +187,13 @@ void BakerBinding::rebind() {
         Bound* raw = b.get();
         // The tweak outlives no binding: it is destroyed with `b`, and with it this callback.
         const_cast<baker::TweakBase&>(raw->tweak()).on_change([raw] { raw->assign(); });
-        if (raw->tweak().bound()) raw->assign();
+        if (raw->tweak().bound())
+            raw->assign();
+        else
+            raw->last = current;
         bound_.push_back(std::move(b));
     }
+    if (!bound_.empty()) live_.push_back(this);
 }
 
 Dictionary BakerBinding::sources() const {
