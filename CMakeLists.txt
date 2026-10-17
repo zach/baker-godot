@@ -25,9 +25,8 @@ FetchContent_Declare(godot-cpp
   GIT_TAG        e83fd0904c13356ed1d4c3d09f8bb9132bdc6b77)  # godot-4.5-stable
 FetchContent_MakeAvailable(godot-cpp)
 
-# Baker, through its public headers only. Pinned to a baker-dev commit until a release
-# carries the project file, explain(), and runtime tweak paths; the published 0.1.0 does not.
-# A local checkout: -DFETCHCONTENT_SOURCE_DIR_BAKER=/path/to/baker-dev
+# Baker, through its public headers only, at a released version.
+# A local checkout: -DFETCHCONTENT_SOURCE_DIR_BAKER=/path/to/baker
 if(GODOTCPP_TARGET STREQUAL "template_release")
   set(BAKER_SHIPPING ON CACHE BOOL "Exports are shipping builds" FORCE)
 endif()
@@ -35,8 +34,8 @@ set(BAKER_BUILD_TESTS OFF CACHE BOOL "" FORCE)
 set(BAKER_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 set(BAKER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(baker
-  GIT_REPOSITORY https://github.com/zach/baker-dev.git
-  GIT_TAG        4a84a63a7ac28790ee89577752d49cb9335dfa4b)
+  GIT_REPOSITORY https://github.com/zach/baker.git
+  GIT_TAG        v0.1.0)
 FetchContent_MakeAvailable(baker)
 
 add_library(baker_godot SHARED

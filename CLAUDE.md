@@ -13,9 +13,9 @@ Godot's terms; baker-dev's `INTEGRATIONS.md` is the policy. For work here:
   into a requirement note, a Baker issue, a pull request, or a Baker session.
 - **Do not start Baker work from this session.** Changes to Baker happen in a separate
   session in baker-dev, from the note alone.
-- **Use Baker as a user would:** through its public headers, at a pinned baker-dev commit
-  until a release carries what this uses. A workaround for a Baker limit lives here until
-  Baker ships the feature.
+- **Use Baker as a user would:** a released version (zach/baker), through its public
+  headers. A workaround for a Baker limit lives here until Baker ships the feature; a
+  feature on baker-dev main reaches this repository at Baker's next release.
 
 ## This repository
 

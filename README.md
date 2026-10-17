@@ -79,8 +79,8 @@ step (run it under a display, such as `xvfb-run`).
 
 ## Building
 
-CMake fetches godot-cpp (4.5) and Baker at a pinned baker-dev commit, and puts the library
-in `sample/addons/baker/bin/`:
+CMake fetches godot-cpp (4.5) and Baker 0.1.0, and puts the library in
+`sample/addons/baker/bin/`:
 
 ```sh
 cmake -B build -DGODOTCPP_TARGET=template_debug && cmake --build build
@@ -88,10 +88,7 @@ cmake -B build-release -DGODOTCPP_TARGET=template_release && cmake --build build
 ```
 
 A release build is a Baker shipping build: no reloads, live edits or write-back. To build
-against a local Baker checkout, add `-DFETCHCONTENT_SOURCE_DIR_BAKER=/path/to/baker-dev`.
-
-Baker is pinned to a baker-dev commit rather than a release, because the published 0.1.0
-predates the project file, `explain`, and tweaks with paths made at runtime.
+against a local Baker checkout, add `-DFETCHCONTENT_SOURCE_DIR_BAKER=/path/to/baker`.
 
 ## Plan
 

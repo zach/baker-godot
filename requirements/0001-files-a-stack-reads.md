@@ -1,6 +1,6 @@
 # 0001: The files a Config's stack was read from, for a host's own watcher
 
-**Shipped** in baker-dev eaba0d7 (D180: `Config::stack_files()` and `stack_files_epoch()`); this integration uses it and has dropped the
+**Shipped** in Baker 0.1.0 (baker-dev eaba0d7, D180: `Config::stack_files()` and `stack_files_epoch()`); this integration uses it and has dropped the
 workaround below.
 
 ## The need

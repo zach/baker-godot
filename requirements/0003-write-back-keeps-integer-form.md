@@ -1,6 +1,6 @@
 # 0003: Write-back keeps a number's integer form when the new value is whole
 
-**Shipped** in baker-dev 4a84a63 (D183); this integration uses it and has dropped the
+**Shipped** in Baker 0.1.0 (baker-dev 4a84a63, D183); this integration uses it and has dropped the
 workaround below.
 
 ## The need
