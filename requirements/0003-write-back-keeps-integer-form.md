@@ -1,5 +1,8 @@
 # 0003: Write-back keeps a number's integer form when the new value is whole
 
+**Shipped** in baker-dev 4a84a63 (D183); this integration uses it and has dropped the
+workaround below.
+
 ## The need
 
 When write-back replaces a number that the file wrote as an integer, and the new value is a

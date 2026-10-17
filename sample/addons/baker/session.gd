@@ -79,7 +79,7 @@ func keep(path: String) -> Error:
 	for l: Dictionary in session.get("layers", []):
 		if l["name"] != "scratch" and states.has(l["name"]):
 			baker.set_layer_enabled(l["name"], l["enabled"])
-	var err := baker.set_value(path, _as_written(entry["value"], entry.get("before")))
+	var err := baker.set_value(path, entry["value"])
 	if err == OK:
 		if entry.get("layer", "") != "":
 			err = baker.write_back(path)
@@ -130,14 +130,6 @@ func chain_text(path: String) -> String:
 		var where := "" if e["file"] == "" else "  %s:%d" % [e["file"], e["line"]]
 		lines.append("%s  %s%s  %s" % [e["layer"], var_to_str(e["value"]), where, e["standing"]])
 	return "\n".join(lines) if not lines.is_empty() else "%s: not in the data" % path
-
-
-## A float property's whole value, kept where the data had an integer, is written as one:
-## (height 96) becomes (height 120), not (height 120.0).
-func _as_written(value: Variant, before: Variant) -> Variant:
-	if value is float and before is int and value == floorf(value) and absf(value) < 1e15:
-		return int(value)
-	return value
 
 
 func _entry(path: String) -> Dictionary:
