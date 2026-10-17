@@ -34,9 +34,9 @@ jobs:
       - name: Build the extension (debug and shipping)
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Debug -DGODOTCPP_TARGET=template_debug -DBAKER_GODOT_WERROR=ON
-          cmake --build build --config Debug --parallel
+          cmake --build build --config Debug --parallel 4
           cmake -B build-release -DCMAKE_BUILD_TYPE=Release -DGODOTCPP_TARGET=template_release -DBAKER_GODOT_WERROR=ON
-          cmake --build build-release --config Release --parallel
+          cmake --build build-release --config Release --parallel 4
       - name: Fetch Godot
         run: |
           curl -sSL -o godot.zip https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/${{ matrix.zip }}
