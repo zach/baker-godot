@@ -26,3 +26,6 @@ Godot's terms; baker-dev's `INTEGRATIONS.md` is the policy. For work here:
   `template_release`, then run `sample/tests/runtime_test.tscn` and the `jump` scenario
   headless (README). A fresh headless import can crash on exit; import twice.
 - Scope is tunables and rules, never scenes.
+- The owner has asked that each new requirement note's full text be sent to the baker-dev
+  session working on Baker (`session_016xH75dZw1uN5knrqdhWRzT`) once it is written, and
+  nothing from this repository beyond the note.
