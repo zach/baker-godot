@@ -1,5 +1,8 @@
 # 0004: Project options a host can build before the call and keep
 
+**Shipped** in Baker 0.1.1 (baker-dev 4f67678, D185: `ProjectOptions::skip` is a `LayerNames`
+held in the options); this integration uses it and has dropped the workaround below.
+
 ## The need
 
 A host can build the options it opens a project with (the layers to leave out, and the

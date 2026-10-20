@@ -35,7 +35,7 @@ set(BAKER_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 set(BAKER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(baker
   GIT_REPOSITORY https://github.com/zach/baker.git
-  GIT_TAG        v0.1.0)
+  GIT_TAG        v0.1.1)
 FetchContent_MakeAvailable(baker)
 
 add_library(baker_godot SHARED

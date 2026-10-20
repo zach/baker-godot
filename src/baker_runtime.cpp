@@ -204,10 +204,9 @@ godot::Error BakerRuntime::open(const String& project_path) {
     config->set_warning_handler([](const baker::Error& e) {
         godot::UtilityFunctions::push_warning(to_godot(baker::to_string(e)));
     });
-    // The skip list's array lives only as long as the call that is given it.
-    auto r = skip_local_ ? baker::open_project(*config, *project, {.skip = {"local"}})
-                         : baker::open_project(*config, *project);
-    if (!r) return fail(r.error());
+    baker::ProjectOptions options;
+    if (skip_local_) (void)options.skip.add("local");
+    if (auto r = baker::open_project(*config, *project, options); !r) return fail(r.error());
     config_ = std::move(config);
     changed();
     return godot::OK;

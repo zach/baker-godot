@@ -126,7 +126,7 @@ step (run it under a display, such as `xvfb-run`).
 
 ## Building
 
-CMake fetches godot-cpp (4.5) and Baker 0.1.0, and puts the library in
+CMake fetches godot-cpp (4.5) and Baker 0.1.1, and puts the library in
 `sample/addons/baker/bin/`:
 
 ```sh
