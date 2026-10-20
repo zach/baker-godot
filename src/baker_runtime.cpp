@@ -237,7 +237,7 @@ void BakerRuntime::read_arguments() {
             // sim and compare run in the scene (scenarios/runner.gd), shipping builds too;
             // every other command is Baker's, in development builds only.
             const std::string command = more ? to_std(args[i + 1]) : "";
-            if (baker::kShipping || command == "sim" || command == "compare") break;
+            if (is_shipping() || command == "sim" || command == "compare") break;
             for (++i; i < args.size(); ++i) {
                 const std::string t = to_std(args[i]);
                 if (t == "--out" && i + 1 < args.size())
