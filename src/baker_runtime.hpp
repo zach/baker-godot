@@ -21,9 +21,10 @@
 //   --console-port N    a loopback console (console.hpp) with Baker's Config tools bound:
 //                       {config.explain p}, {config.set p v}, {config.toggle layer}, ...
 //   --console-write     also config.write_back and config.promote
-//   --baker COMMAND...  run a tool command once the scene is ready, then quit (tools.hpp)
-//   --no-local          leave out the `local` layer; tool commands and scenarios always do,
-//                       in shipping builds too
+//   --baker COMMAND...  run a tool command once the scene is ready, then quit (tools.hpp);
+//                       sim and compare are the scene's (scenarios/runner.gd)
+//   --no-local          leave out the `local` layer; every --baker command does, in shipping
+//                       builds too
 
 #include "godot_files.hpp"
 

@@ -231,16 +231,13 @@ void BakerRuntime::read_arguments() {
     for (int64_t i = 0; i < args.size(); ++i) {
         const std::string a = to_std(args[i]);
         const bool more = i + 1 < args.size();
-        if (a == "--no-local" || a.rfind("--scenario", 0) == 0) {
+        if (a == "--no-local" || a == "--baker") {
             skip_local_ = true;  // a run's results do not depend on whose machine it is on
-        } else if constexpr (baker::kShipping) {
-            continue;  // no console or tools in a shipping build
-        } else if (a == "--console-port" && more) {
-            console_port_ = int(args[++i].to_int());
-        } else if (a == "--console-write") {
-            console_write_ = true;
-        } else if (a == "--baker") {
-            skip_local_ = true;
+            if (a == "--no-local") continue;
+            // sim and compare run in the scene (scenarios/runner.gd), shipping builds too;
+            // every other command is Baker's, in development builds only.
+            const std::string command = more ? to_std(args[i + 1]) : "";
+            if (baker::kShipping || command == "sim" || command == "compare") break;
             for (++i; i < args.size(); ++i) {
                 const std::string t = to_std(args[i]);
                 if (t == "--out" && i + 1 < args.size())
@@ -249,6 +246,12 @@ void BakerRuntime::read_arguments() {
                     tool_args_.push_back(t);
             }
             if (tool_args_.empty()) tool_args_.push_back("");
+        } else if constexpr (baker::kShipping) {
+            continue;  // no console in a shipping build
+        } else if (a == "--console-port" && more) {
+            console_port_ = int(args[++i].to_int());
+        } else if (a == "--console-write") {
+            console_write_ = true;
         }
     }
 }

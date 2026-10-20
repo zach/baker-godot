@@ -7,6 +7,7 @@ extends Node
 signal finished(run: Dictionary)
 
 var player: CharacterBody2D
+var seed := 1  # set by the runner; the game draws no random numbers, so runs repeat
 var _jumping := false
 var _move := 0.0
 var _steps := 0
@@ -54,7 +55,7 @@ func finish(objectives: Array) -> void:
 		"name": o["name"], "value": o["value"], "pass": o["pass"], "over": "seed", "error": ""})
 	finished.emit({
 		"scenario": get_script().resource_path.get_file().get_basename(),
-		"seed": 1,
+		"seed": seed,
 		"steps": _steps,
 		"passed": objectives.all(func(o): return o["pass"]),
 		"errors": [],

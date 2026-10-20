@@ -30,7 +30,7 @@ check() {
     if [ "$1" -eq 0 ]; then echo "ok   $2"; else echo "FAIL $2"; failures=$((failures + 1)); fi
 }
 [ -f "$game" ]; check $? "exports $preset"
-timeout 60 "$game" --headless -- --scenario jump --out "$work/sim" >/dev/null 2>&1
+timeout 60 "$game" --headless -- --baker sim --scenario jump --out "$work/sim" >/dev/null 2>&1
 check $? "the exported game runs the jump scenario"
 "$py" - "$work/sim/results.json" <<'PY'
 import json, sys

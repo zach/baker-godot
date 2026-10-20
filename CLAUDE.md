@@ -27,6 +27,8 @@ Godot's terms; baker-dev's `INTEGRATIONS.md` is the policy. For work here:
   `tests/e2e.sh`, `tests/agent.sh`, and `tests/export.sh` headless (README). A fresh
   headless import can crash on exit; import twice.
 - Scope is tunables and rules, never scenes.
+- The agent skill (`.claude/skills/sample-agent/SKILL.md`) teaches the loop over the
+  sample's commands; change it with them. `tests/agent.sh` runs the loop it teaches.
 - The owner has asked that each new requirement note's full text be sent to the baker-dev
   session working on Baker (`session_016xH75dZw1uN5knrqdhWRzT`) once it is written, and
   nothing from this repository beyond the note.

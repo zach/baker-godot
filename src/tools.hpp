@@ -9,6 +9,8 @@
 //   godot --headless --path . -- --baker diff
 //   godot --headless --path . -- --baker promote [--to default] --patch FILE
 //
+// (sim and compare, which need the scene's scenarios, are the sample's runner.gd.)
+//
 // Each prints its result (Baker's JSON with --json: baker.check/1, baker.reference/1 with
 // baker.tweaks/1 and baker.shapes/1, one baker.reply/1.1 line per command), and with
 // --out FILE writes it there too. The layers are the project's without `local`, so a run

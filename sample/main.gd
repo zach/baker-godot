@@ -1,7 +1,7 @@
 ## The sample level: a floor, some platforms, the player, and a line of help.
 ##
 ## F1 toggles the `floaty` experiment layer while playing. Run with
-## `-- --scenario NAME`... to play scenarios from res://scenarios/ instead of the keyboard.
+## `-- --baker sim` to run the scenarios in res://scenarios/ instead of playing.
 extends Node2D
 
 const PLATFORMS := [
@@ -24,10 +24,11 @@ func _ready() -> void:
 	_run_scenarios()
 
 
-## Under --scenario NAME..., each fresh instance of this scene runs the next scenario
-## (scenarios/runner.gd), the runner kept above the scene across reloads.
+## Under --baker sim, each fresh instance of this scene runs the next scenario
+## (scenarios/runner.gd), the runner kept above the scene across reloads; --baker compare
+## is answered there too.
 func _run_scenarios() -> void:
-	var runner := get_tree().root.get_node_or_null("ScenarioRunner")
+	var runner := get_tree().root.get_node_or_null("BakerRunner")
 	if runner == null:
 		runner = preload("res://scenarios/runner.gd").from_arguments()
 		if runner == null:

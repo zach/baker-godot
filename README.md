@@ -65,9 +65,11 @@ the remote inspector sends, and checks the diff.
 
 ## Agents
 
-An agent works on the game's data through the same surface a person's tools use, in
-debug builds, with nothing to parse that Baker did not write as JSON. It is the surface the
-MCP bridge of baker-mcp is planned against; the bridge itself is not built yet.
+An agent works on the game's data the way a technical designer does, with a shell and the
+game's own commands, and the agent skill (`.claude/skills/sample-agent/SKILL.md`) teaches
+the loop: read, baseline, change `agent.dta`, check, simulate, compare, report, stop. The
+commands and their output are the ones Baker's game stacks have, so the same skill's habits
+carry over.
 
 - **The game as its own tool.** Run headless with the scene loaded, so the bound
   properties are tweaks:
@@ -75,43 +77,43 @@ MCP bridge of baker-mcp is planned against; the bridge itself is not built yet.
   ```sh
   godot --headless --path sample -- --baker check --json         # baker.check/1
   godot --headless --path sample -- --baker reference --json     # vocabulary, tweaks, shapes
+  godot --headless --path sample -- --baker sim --seeds 1-3 --out runs/before
+  godot --headless --path sample -- --baker compare runs/before runs/after
   godot --headless --path sample -- --baker eval --json "{config.explain player.jump.height}"
   godot --headless --path sample -- --baker diff                 # what agent.dta changes
   godot --headless --path sample -- --baker promote --patch agent.patch
   ```
 
-  `--out FILE` writes the result to a file too. `promote` writes nothing but the patch: a
-  person applies it (`git apply -p1`) or keeps the values from the editor.
-- **Scenarios** drive the player and judge each run by written objectives, reported as
-  the stacks' `sim` command reports them: `-- --scenario reach --scenario jump --out DIR`
-  runs each in a fresh scene and writes `DIR/results.json` (`stacks.sim/1.1`, with a
-  `host` object giving the layers and whether the build ships). The exit status is 1 if a
-  run failed. `reach` asks whether a jump clears the first platform; the shipped data's
-  does not.
+  `--out FILE` writes a tool command's result to a file too.
+- **`sim`** runs the scenarios in `sample/scenarios/` (all unless `--scenario NAME`), each
+  run in a fresh scene, and judges each by its objectives: results as `stacks.sim/1.1` (in
+  `DIR/results.json` with `--out DIR`; with a `host` object giving the layers and whether
+  the build ships), exit 1 if an objective failed. **`compare`** says which objectives broke
+  or were fixed between two runs (`stacks.compare/1.1`), and exits 1 if one broke. `reach`
+  asks whether a jump clears the first platform and stays below the second; the shipped
+  data's does not clear it.
 - **The agent layer.** An agent proposes in `data/agent.dta`, which version control
-  ignores; `check`, `diff` and the scenarios then judge the proposal.
+  ignores. `promote` writes nothing but a patch: a person applies it (`git apply -p1`) or
+  keeps the values from the editor.
 - **The running game's console**, on 127.0.0.1 only: `-- --console-port 7000`. A line
   `(1 {config.toggle agent})` is answered with one line of `baker.reply/1.1` JSON. Baker's
   Config tools are bound (`config.explain`, `config.set`, `config.toggle`,
   `config.journal`, ...); the ones that write files only with `--console-write`.
   `tests/console.py` is a client.
 
-**The bridge entry.** `sample/baker-bridge.json` says how a bridge drives this game: the
-argument lists for the tool commands, the scenario runs, and the console, where each
-result is written, and which schema it has. Its format is this repository's proposal:
-baker-mcp's bridge, when it is built, may define its own.
-
-Tool commands and scenarios leave out the `local` layer, so their results do not depend on
-whose machine runs them. `tests/agent.sh` runs an agent's loop end to end: `reach` fails,
-a proposal in `agent.dta` passes `check` and makes `reach` pass, A/B over the console, and
-a promote patch that applies as a one-line diff.
+Every `--baker` command leaves out the `local` layer, so its results do not depend on whose
+machine runs it. `tests/agent.sh` runs the skill's loop end to end: the baseline fails
+`reach`; a jump of 200 fixes it but breaks the second objective, and `compare` refuses it; a
+jump of 120 passes `check`, `sim` and `compare`; A/B over the console; and a promote patch
+that applies as a one-line diff.
 
 ## Exports
 
 A release export is a Baker shipping build: the data is packed (`export_presets.cfg`
 includes `*.dta`) and read as text, without caches, which are tied to Baker's version and
 pointer size. It does not reload, take live edits, write, or open a console.
-`tests/export.sh` exports the sample and runs a scenario in the exported game.
+`tests/export.sh` exports the sample and runs `--baker sim` in the exported game: `sim` and
+`compare` work in shipping builds; the other commands and the console do not.
 `tools/fetch_template.py` installs one platform's export template without downloading the
 whole bundle.
 
@@ -121,7 +123,7 @@ whole bundle.
 `floaty` (F1 while playing), and a headless scenario:
 
 ```sh
-godot --headless --path sample -- --scenario jump       # checks the jump's apex
+godot --headless --path sample -- --baker sim           # the scenarios, judged
 godot --headless --path sample res://tests/runtime_test.tscn
 tests/e2e.sh path/to/godot                              # the demonstration, headless
 tests/agent.sh path/to/godot                            # an agent's loop
@@ -152,7 +154,9 @@ against a local Baker checkout, add `-DFETCHCONTENT_SOURCE_DIR_BAKER=/path/to/ba
    Discard), an inspector plugin showing a property's layer chain, the journal sent over
    the debugger channel, and write-back from the editor process.
 3. **Agents and shipping** (done): the console and Baker's Config tools in debug builds,
-   the game's tool commands and scenarios headless, and exports that load text.
+   the game's tool commands, `sim` and `compare` headless, the agent skill, and exports that
+   load text. (An MCP bridge, plan A, was built and evaluated in baker-mcp; the command
+   line and skill needed fewer calls for the same success, so this repository drops it.)
 4. **Requirements back to Baker**, as notes in `requirements/`.
 
 ## Requirements for Baker

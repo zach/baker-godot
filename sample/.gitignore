@@ -1,2 +1,4 @@
 .godot/
 data/agent.dta
+runs/
+*.patch
