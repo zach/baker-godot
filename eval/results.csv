@@ -1,0 +1,10 @@
+task,run,success,untouched,check,sim,condition,agent_dta,turns,tool_calls,tokens,output_tokens,cost_usd,wall_s,ended
+floaty-fall,1,1,1,1,1,1,; Agent layer: experiments over tuning.dta. | (player |    (jump |       (fall_multiplier 2.3)))  ; snappier fall: more gravity after the apex; rise and height unchanged |,5,3,169030,1066,0.0772,30,success
+floaty-fall,2,1,1,1,1,1,(player |    (jump |       (fall_multiplier 2.2)))  ; snappier fall: more gravity after the apex; height and rise time untouched |,7,5,213327,1195,0.0847,34,success
+floaty-fall,3,1,1,1,1,1,"(player |    (jump |       (fall_multiplier 2.4)))  ; heavier gravity on the way down: less hang after the apex, rise and height unchanged |",5,3,168997,1109,0.0767,33,success
+reach-short,1,1,1,1,1,1,"(player (jump (height 120)))  ; apex 120 clears the 100 px platform with 20 px to spare, stays under 160 |",5,3,169219,1050,0.1979,30,success
+reach-short,2,1,1,1,1,1,"; Agent layer over tuning.dta. | (player (jump (height 120)))  ; apex 96 missed the first platform (100 + 10 spare); 120 clears it, stays well under the second (180 - 20) |",5,3,170049,1094,0.201,30,success
+reach-short,3,1,1,1,1,1,"; Agent layer over tuning.dta. |  | (player |    (jump |       (height 124)))  ; apex was 96, short of the first platform (100 + 10 spare); 124 clears it, stays under 160 |",6,4,215158,1367,0.0892,41,success
+skips-climb,1,1,1,1,1,1,(player (jump (height 135)))  ; 190 skipped the 180px second platform; 135 clears the 100px first one with room and stays well under the second |,5,3,169022,1174,0.0773,31,success
+skips-climb,2,1,1,1,1,1,"; Agent layer over tuning.dta. | (player |    (jump |       (height 135)))  ; clears the first platform (100 up) with room, stays under the second (180 up): two jumps |",5,3,169434,1086,0.0785,30,success
+skips-climb,3,1,1,1,1,1,(player (jump (height 135)))  ; must clear 100+10 and stay under 180-20; 135 sits mid-window so the climb takes two jumps |,5,3,168950,1078,0.0765,30,success
