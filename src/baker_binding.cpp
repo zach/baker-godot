@@ -11,6 +11,9 @@
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 
+#include <memory>
+#include <vector>
+
 namespace baker_godot {
 
 using godot::Array;
@@ -38,7 +41,8 @@ namespace {
 
 template <class T>
 struct BoundAs final : BakerBinding::Bound {
-    explicit BoundAs(baker::Symbol path, T fallback) : t(path, std::move(fallback)) {}
+    BoundAs(baker::Symbol path, T fallback, const baker::TweakMeta& meta)
+        : t(path, std::move(fallback), meta) {}
     [[nodiscard]] const baker::TweakBase& tweak() const override { return t; }
     [[nodiscard]] Variant value() const override { return Variant(t.value()); }
     baker::Tweak<T> t;
@@ -47,7 +51,8 @@ struct BoundAs final : BakerBinding::Bound {
 // A StringName reads as a symbol: the tweak holds a Symbol, the property a StringName.
 template <>
 struct BoundAs<baker::Symbol> final : BakerBinding::Bound {
-    BoundAs(baker::Symbol path, baker::Symbol fallback) : t(path, fallback) {}
+    BoundAs(baker::Symbol path, baker::Symbol fallback, const baker::TweakMeta& meta)
+        : t(path, fallback, meta) {}
     [[nodiscard]] const baker::TweakBase& tweak() const override { return t; }
     [[nodiscard]] Variant value() const override {
         return godot::StringName(to_godot(t.value().str()));
@@ -56,20 +61,39 @@ struct BoundAs<baker::Symbol> final : BakerBinding::Bound {
 };
 
 // A tweak whose default is the property's value from the scene.
-std::unique_ptr<BakerBinding::Bound> make_bound(baker::Symbol path, const Variant& v) {
+std::unique_ptr<BakerBinding::Bound> make_bound(baker::Symbol path, const Variant& v,
+                                                const baker::TweakMeta& m) {
     switch (v.get_type()) {
-        case Variant::BOOL: return std::make_unique<BoundAs<bool>>(path, bool(v));
-        case Variant::INT: return std::make_unique<BoundAs<int64_t>>(path, int64_t(v));
-        case Variant::FLOAT: return std::make_unique<BoundAs<double>>(path, double(v));
+        case Variant::BOOL: return std::make_unique<BoundAs<bool>>(path, bool(v), m);
+        case Variant::INT: return std::make_unique<BoundAs<int64_t>>(path, int64_t(v), m);
+        case Variant::FLOAT: return std::make_unique<BoundAs<double>>(path, double(v), m);
         case Variant::STRING:
-            return std::make_unique<BoundAs<godot::String>>(path, godot::String(v));
+            return std::make_unique<BoundAs<godot::String>>(path, godot::String(v), m);
+        case Variant::STRING_NAME:
+            return std::make_unique<BoundAs<baker::Symbol>>(path, baker::Symbol(to_std(String(v))),
+                                                            m);
         case Variant::VECTOR2:
-            return std::make_unique<BoundAs<godot::Vector2>>(path, godot::Vector2(v));
+            return std::make_unique<BoundAs<godot::Vector2>>(path, godot::Vector2(v), m);
         case Variant::VECTOR3:
-            return std::make_unique<BoundAs<godot::Vector3>>(path, godot::Vector3(v));
-        case Variant::COLOR: return std::make_unique<BoundAs<godot::Color>>(path, godot::Color(v));
+            return std::make_unique<BoundAs<godot::Vector3>>(path, godot::Vector3(v), m);
+        case Variant::COLOR:
+            return std::make_unique<BoundAs<godot::Color>>(path, godot::Color(v), m);
         default: return nullptr;
     }
+}
+
+// What the property's export hint says, as the tweak's metadata, for tools and agents:
+// @export_range(min, max, step) its range and step.
+baker::TweakMeta meta_of(const Dictionary& property) {
+    baker::TweakMeta meta;
+    const int64_t hint = property.get("hint", 0);
+    const godot::PackedStringArray parts = String(property.get("hint_string", "")).split(",");
+    if (hint == godot::PROPERTY_HINT_RANGE && parts.size() >= 2 && parts[0].is_valid_float() &&
+        parts[1].is_valid_float()) {
+        meta.range = {parts[0].to_float(), parts[1].to_float()};
+        if (parts.size() >= 3 && parts[2].is_valid_float()) meta.step = parts[2].to_float();
+    }
+    return meta;
 }
 
 }  // namespace
@@ -162,20 +186,16 @@ void BakerBinding::rebind() {
     for (int64_t i = 0; i < properties.size(); ++i) {
         const godot::StringName property = properties[i];
         const String path = bindings_[properties[i]];
-        bool has = false;
+        Dictionary info;
         const Variant current = target->get(property);
         for (const Variant& p : target->get_property_list())
-            if (godot::StringName(Dictionary(p)["name"]) == property) has = true;
-        if (!has) {
+            if (godot::StringName(Dictionary(p)["name"]) == property) info = p;
+        if (info.is_empty()) {
             godot::UtilityFunctions::push_warning("BakerBinding: ", target->get_name(),
                                                   " has no property ", property);
             continue;
         }
-        const baker::Symbol symbol(to_std(path));
-        std::unique_ptr<Bound> b = current.get_type() == Variant::STRING_NAME
-                                       ? std::make_unique<BoundAs<baker::Symbol>>(
-                                             symbol, baker::Symbol(to_std(String(current))))
-                                       : make_bound(symbol, current);
+        std::unique_ptr<Bound> b = make_bound(baker::Symbol(to_std(path)), current, meta_of(info));
         if (!b) {
             godot::UtilityFunctions::push_warning("BakerBinding: ", property, " is a ",
                                                   Variant::get_type_name(current.get_type()),

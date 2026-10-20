@@ -2,19 +2,20 @@
 ##
 ## Each @export below is bound to a path by the BakerBinding child, so it holds the data's
 ## value, follows every reload and layer toggle, and reads as a plain property. A path the
-## data lacks leaves the value set here standing.
+## data lacks leaves the value set here standing. Each range is the tweak's range too, which
+## tools and agents read in `--baker reference --json`.
 extends CharacterBody2D
 
-@export var run_speed := 200.0
-@export var run_accel := 1200.0
-@export var run_friction := 1600.0
-@export var air_control := 0.5
-@export var jump_height := 80.0
-@export var jump_time_to_peak := 0.4
-@export var fall_multiplier := 1.5
-@export var coyote_time := 0.08
-@export var jump_buffer := 0.1
-@export var max_fall := 800.0
+@export_range(50, 600, 1) var run_speed := 200.0
+@export_range(100, 5000, 10) var run_accel := 1200.0
+@export_range(100, 5000, 10) var run_friction := 1600.0
+@export_range(0, 1, 0.05) var air_control := 0.5
+@export_range(16, 320, 1) var jump_height := 80.0
+@export_range(0.1, 1, 0.01) var jump_time_to_peak := 0.4
+@export_range(1, 4, 0.05) var fall_multiplier := 1.5
+@export_range(0, 0.3, 0.01) var coyote_time := 0.08
+@export_range(0, 0.3, 0.01) var jump_buffer := 0.1
+@export_range(100, 2000, 10) var max_fall := 800.0
 
 ## Where input comes from: the keyboard, or a scenario that drives the player.
 ## It returns {"move": -1..1, "jump": bool (held)}.

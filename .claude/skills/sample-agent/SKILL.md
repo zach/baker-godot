@@ -31,7 +31,7 @@ relative path you give (`--out runs/before`, `compare`'s directories, `--patch`)
 
 | Command | What it tells you |
 |---|---|
-| `$G --baker reference` | Every script function, global, shape, and pack. `--json` gives the same, plus every tweak: each bound property, its path, type, default and current value. Read it first. |
+| `$G --baker reference` | Every script function, global, shape, and pack. `--json` gives the same, plus every tweak: each bound property, its path, type, default and current value, and the range and step the game declares for it. Read it first, and keep a value you propose within its range. |
 | `$G --baker check --json` | Errors, load problems, and calls to undefined functions in the data. `passed` false and exit 1 mean fix before anything else. |
 | `$G --baker sim [--scenario NAME] [--seeds 1-10] [--out DIR] [--json]` | Runs the scenarios headless (every one unless named), judges each run by its objectives. Exit 0: all passed; 1: an objective failed; 2: something could not run. `--out DIR` writes `DIR/results.json`. |
 | `$G --baker compare BEFORE AFTER` | Which objectives moved between two `sim --out` directories, as JSON; exit 1 if one broke. |

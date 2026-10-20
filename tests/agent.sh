@@ -51,6 +51,8 @@ json check.json 'd["schema"].startswith("baker.check/") and d["passed"]'; check 
 tool ref.json reference --json; check $? "reference --json"
 json ref.json 'any(t["path"] == "player.jump.height" for t in d["tweaks"]["tweaks"])'
 check $? "  lists the bound properties as tweaks"
+json ref.json '[(t["range"], t["step"]) for t in d["tweaks"]["tweaks"] if t["path"] == "player.jump.height"] == [([16, 320], 1)]'
+check $? "  with the range and step of each property's @export_range"
 
 # 2.
 sim before; status=$?
