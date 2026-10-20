@@ -1,5 +1,9 @@
 # 0007: The kit's tool commands read and write through the host
 
+**Merged** into baker-dev main (D195: `CommandHooks::reader` and `output`, and the kit's
+`--output FILE`), in no release yet. This integration keeps its own commands until a
+release carries it.
+
 ## The need
 
 A host can run the kit's tool commands (check, reference, diff, promote, eval) over the
