@@ -1,8 +1,9 @@
 #pragma once
 
 // BakerRuntime: the game's Baker, as the autoload `Baker` (addons/baker/baker.gd extends
-// it). It owns the Config, opens the stack the project file names, and, in debug builds,
-// reloads what changed on disk once a frame. Everything runs on the main thread.
+// it). Baker's host loop (baker::host::Live) owns the Config: it opens the stack the
+// project file names and, in debug builds, reloads what was saved, watching the files
+// through the operating system. Everything runs on the main thread.
 //
 //   var h = Baker.get_value("player.jump.height", 96.0)   # a read through the Config
 //   var g = Baker.tweak("world.gravity", 980.0)           # cached until the data changes
@@ -18,7 +19,7 @@
 // (project_writes), so that "Keep" writes a value back from the editor process.
 //
 // For tools and agents, in debug builds (the user arguments after `--`):
-//   --console-port N    a loopback console (console.hpp) with Baker's Config tools bound:
+//   --console-port N    Baker's loopback console, with the Config tools bound:
 //                       {config.explain p}, {config.set p v}, {config.toggle layer}, ...
 //   --console-write     also config.write_back and config.promote
 //   --baker COMMAND...  run a tool command once the scene is ready, then quit (tools.hpp);
@@ -26,10 +27,8 @@
 //   --no-local          leave out the `local` layer; every --baker command does, in shipping
 //                       builds too
 
-#include "godot_files.hpp"
-
 #include <baker/config.hpp>
-#include <baker/project.hpp>
+#include <baker/host/live.hpp>
 #include <baker/script.hpp>
 
 #include <godot_cpp/classes/node.hpp>
@@ -53,7 +52,10 @@ public:
     // The runtime in the scene tree, or null.
     [[nodiscard]] static BakerRuntime* get_singleton() noexcept { return singleton_; }
     // Null until the project is open.
-    [[nodiscard]] baker::Config* config() noexcept { return config_.get(); }
+    [[nodiscard]] baker::Config* config() noexcept { return live_ ? &live_->config() : nullptr; }
+    [[nodiscard]] const baker::Config* config() const noexcept {
+        return live_ ? &live_->config() : nullptr;
+    }
 
     void _enter_tree() override;
     void _exit_tree() override;
@@ -63,7 +65,7 @@ public:
     // Opens the project file: its layers, pack levels, include directories, and defines.
     // A project file at res:// is opened on entering the tree.
     godot::Error open(const godot::String& project_path);
-    [[nodiscard]] bool is_open() const noexcept { return config_ != nullptr; }
+    [[nodiscard]] bool is_open() const noexcept { return live_ != nullptr; }
     // [{name, enabled, file}], bottom to top, ending with "scratch".
     [[nodiscard]] godot::Array get_layers() const;
     godot::Error set_layer_enabled(const godot::String& layer, bool enabled);
@@ -134,47 +136,40 @@ protected:
 private:
     // After every change of the data: clears tweak()'s cache and emits `changed`.
     void changed();
+    // changed(), unless it was already called for the Config's epoch: Live reports at the
+    // next frame what a call here already reported.
+    void changed_since();
     godot::Error fail(const baker::Error& error);
     void present();
-    void watch_files();
-    void poll();
     godot::Error wrote(const baker::WriteReport& report);
     void read_arguments();
-    // The script Context with the Config tools bound, made on first use; null if no
-    // project is open.
-    baker::Context* context();
     std::string answer(const std::string& line);
     void run_tool_command();
     bool debugger_message(const godot::String& message, const godot::Array& data);
 
     static BakerRuntime* singleton_;
-    std::unique_ptr<baker::Config> config_;
     godot::String project_path_ = "res://baker-project.dta";
     godot::String last_error_;
     godot::Dictionary cache_;  // tweak(): path -> value
-    bool watch_ = true;        // poll the layers' files (debug builds)
+    bool watch_ = true;        // watch the layers' files (debug builds), from the next open
     bool project_writes_ = false;
     bool capturing_ = false;      // registered with the editor's debugger
     bool session_dirty_ = false;  // the session changed since it was last sent
     godot::Array last_written_;
 
-    // Tools and agents (debug builds). The Context uses the Config: it goes first.
+    // Live binds the Config's tools into the Context, which outlives it.
     std::unique_ptr<baker::Context> context_;
-    std::unique_ptr<class Console> console_;
+    std::unique_ptr<baker::host::Live> live_;
+    static constexpr uint64_t kNoEpoch = ~uint64_t(0);
+    uint64_t seen_epoch_ = kNoEpoch;  // the Config's epoch() when changed() last ran
+
+    // Tools and agents (debug builds).
     std::vector<std::string> tool_args_;  // --baker COMMAND ...: run once the scene is ready
     std::string tool_out_;                // --out FILE
     int tool_frames_ = 0;
     int console_port_ = -1;  // --console-port N; -1: none
     bool console_write_ = false;
     bool skip_local_ = false;
-
-    struct Watched {
-        std::string path;
-        FileStamp stamp;
-    };
-    std::vector<Watched> watched_;
-    static constexpr uint64_t kNoEpoch = ~uint64_t(0);
-    uint64_t watched_epoch_ = kNoEpoch;  // stack_files_epoch() when watched_ was made
 };
 
 }  // namespace baker_godot

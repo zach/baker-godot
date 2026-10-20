@@ -1,5 +1,8 @@
 # 0006: A host can tell that a live edit happened
 
+**Shipped** in Baker 0.2.0 (`Config::epoch()` moves on every live edit, and the host loop's
+`changed` callback follows it); this integration uses it and has dropped its own console.
+
 ## The need
 
 A host can tell, with one number to compare each frame or with a callback, that the

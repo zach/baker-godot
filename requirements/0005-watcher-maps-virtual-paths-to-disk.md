@@ -1,5 +1,9 @@
 # 0005: The watcher maps a host's virtual path to its file on the disk
 
+**Shipped** in Baker 0.2.0 (the watcher's disk-path hook, `Watcher::set_disk_path_hook` and
+`LiveOptions::disk_path`); this integration uses it through the host loop and has dropped
+its own watcher.
+
 ## The need
 
 A host can tell the watcher where a path it names virtually lives on the disk, so the

@@ -23,7 +23,9 @@ the remote inspector sends, and checks the diff.
 
 - **The `Baker` autoload** (`addons/baker/baker.gd`, a `BakerRuntime`) opens
   `baker-project.dta` at the project root: the same layer stack Baker's editor and checker
-  read. In debug builds it reloads a layer file when it changes on disk, within a frame.
+  read. It runs Baker's host loop (`baker::host::Live`): in debug builds it reloads a layer
+  file when it is saved, within a frame, watching the files through the operating system
+  (res:// and user:// are mapped to their directories on the disk).
 - **`BakerBinding`**, a node that binds properties of its parent to paths in the data:
 
   ```
@@ -95,7 +97,7 @@ carry over.
 - **The agent layer.** An agent proposes in `data/agent.dta`, which version control
   ignores. `promote` writes nothing but a patch: a person applies it (`git apply -p1`) or
   keeps the values from the editor.
-- **The running game's console**, on 127.0.0.1 only: `-- --console-port 7000`. A line
+- **The running game's console** (Baker's), on 127.0.0.1 only: `-- --console-port 7000`. A line
   `(1 {config.toggle agent})` is answered with one line of `baker.reply/1.1` JSON. Baker's
   Config tools are bound (`config.explain`, `config.set`, `config.toggle`,
   `config.journal`, ...); the ones that write files only with `--console-write`.
@@ -135,7 +137,7 @@ step (run it under a display, such as `xvfb-run`).
 
 ## Building
 
-CMake fetches godot-cpp (4.5) and Baker 0.1.1, and puts the library in
+CMake fetches godot-cpp (4.5) and Baker 0.2.0 (its core and its host kit), and puts the library in
 `sample/addons/baker/bin/`:
 
 ```sh

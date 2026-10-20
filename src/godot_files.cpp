@@ -2,16 +2,10 @@
 
 #include "values.hpp"
 
-#include <baker/clock.hpp>
-
 #include <godot_cpp/classes/dir_access.hpp>
 #include <godot_cpp/classes/file_access.hpp>
+#include <godot_cpp/classes/os.hpp>
 #include <godot_cpp/classes/project_settings.hpp>
-
-#include <algorithm>
-#include <chrono>
-#include <filesystem>
-#include <system_error>
 
 namespace baker_godot {
 
@@ -54,30 +48,15 @@ bool write_file(std::string_view path, std::string_view text, bool project) {
     return f->store_buffer(bytes);
 }
 
-FileStamp file_stamp(std::string_view path) {
+bool disk_path(std::string_view path, std::string& out) {
+    const std::string p = godot_path(path);
+    // An export's res:// is its pack, not a directory.
+    if (starts_with(p, "res://") && godot::OS::get_singleton()->has_feature("template"))
+        return false;
     const godot::String global =
-        godot::ProjectSettings::get_singleton()->globalize_path(to_godot(godot_path(path)));
-    const std::filesystem::path p = to_std(global);
-    std::error_code ec;
-    const auto written = std::filesystem::last_write_time(p, ec);
-    if (ec) return {};
-    const uintmax_t size = std::filesystem::file_size(p, ec);
-    if (ec) return {};
-    return {
-        true,
-        std::chrono::duration_cast<std::chrono::nanoseconds>(written.time_since_epoch()).count(),
-        size};
-}
-
-uint64_t steady_from_file_time(int64_t file_ns) {
-    // The file's age by the file clock, subtracted from the steady clock's now: the error is
-    // the time between the two now()s.
-    const int64_t now_file = std::chrono::duration_cast<std::chrono::nanoseconds>(
-                                 std::chrono::file_clock::now().time_since_epoch())
-                                 .count();
-    const uint64_t now = baker::steady_now();
-    const int64_t age = now_file - file_ns;
-    return age <= 0 ? now : now - std::min<uint64_t>(now, uint64_t(age));
+        godot::ProjectSettings::get_singleton()->globalize_path(to_godot(p));
+    out = to_std(global);
+    return out.find("://") == std::string::npos;
 }
 
 }  // namespace baker_godot

@@ -1,12 +1,12 @@
 #include "baker_runtime.hpp"
 
 #include "baker_binding.hpp"
-#include "console.hpp"
 #include "godot_files.hpp"
 #include "tools.hpp"
 #include "values.hpp"
 
 #include <baker/error.hpp>
+#include <baker/project.hpp>
 #include <baker/std_interop.hpp>
 #include <baker/std_script.hpp>
 
@@ -21,6 +21,7 @@
 #include <godot_cpp/variant/utility_functions.hpp>
 
 #include <cstdio>
+#include <string>
 #include <string_view>
 
 namespace baker_godot {
@@ -141,18 +142,11 @@ void BakerRuntime::_enter_tree() {
     }
     singleton_ = this;
     read_arguments();
-    if (!config_ && godot::FileAccess::file_exists(project_path_)) (void)open(project_path_);
+    if (!live_ && godot::FileAccess::file_exists(project_path_)) (void)open(project_path_);
     if constexpr (!baker::kShipping) {
         set_process(true);
-        if (console_port_ >= 0) {
-            console_ =
-                std::make_unique<Console>([this](const std::string& line) { return answer(line); });
-            if (console_->listen(uint16_t(console_port_)))
-                godot::UtilityFunctions::print("Baker: console on 127.0.0.1:", console_->port());
-            else
-                godot::UtilityFunctions::push_error("Baker: no console: cannot listen on ",
-                                                    console_port_);
-        }
+        if (get_console_port())
+            godot::UtilityFunctions::print("Baker: console on 127.0.0.1:", get_console_port());
         // Edit-to-see ends when the frame showing the edit is drawn.
         godot::RenderingServer::get_singleton()->connect("frame_post_draw",
                                                          callable_mp(this, &BakerRuntime::present));
@@ -176,48 +170,58 @@ void BakerRuntime::_exit_tree() {
         if (capturing_) godot::EngineDebugger::get_singleton()->unregister_message_capture("baker");
         capturing_ = false;
     }
-    console_.reset();
+    live_.reset();
     context_.reset();
-    config_.reset();
-    watched_.clear();
-    watched_epoch_ = kNoEpoch;
     singleton_ = nullptr;
 }
 
 godot::Error BakerRuntime::open(const String& project_path) {
     if (&project_path != &project_path_)
         project_path_ = project_path;  // a self-assignment empties it
-    const baker::LoadSession::Reader read = baker_godot::reader();
-    auto project = baker::read_project(project_file(project_path), read);
-    if (!project) return fail(project.error());
-
     // A Config binds the global tweak registry: close the old one before making another.
+    live_.reset();
     context_.reset();
-    config_.reset();
-    watched_.clear();
-    watched_epoch_ = kNoEpoch;
-    auto config = std::make_unique<baker::Config>();
-    config->session().set_reader(read);
-    config->set_writer([this](std::string_view path, std::string_view text) {
+    seen_epoch_ = kNoEpoch;
+    context_ = std::make_unique<baker::Context>();
+    live_ = std::make_unique<baker::host::Live>(*context_);
+    live_->config().set_writer([this](std::string_view path, std::string_view text) {
         return write_file(path, text, project_writes_);
     });
-    config->set_warning_handler([](const baker::Error& e) {
-        godot::UtilityFunctions::push_warning(to_godot(baker::to_string(e)));
-    });
-    baker::ProjectOptions options;
-    if (skip_local_) (void)options.skip.add("local");
-    if (auto r = baker::open_project(*config, *project, options); !r) return fail(r.error());
-    config_ = std::move(config);
-    changed();
+    const std::string file = project_file(project_path);
+    const bool game = !godot::Engine::get_singleton()->is_editor_hint();
+    baker::host::LiveOptions options{
+        .project = file,
+        .reader = reader(),
+        .disk_path =
+            [](std::string_view path, baker::TextSink out) {
+                std::string disk;
+                if (!disk_path(path, disk)) return false;
+                out(disk);
+                return true;
+            },
+        .watch = watch_ && game && godot::OS::get_singleton()->is_debug_build(),
+        .console_port = uint16_t(console_port_ > 0 ? console_port_ : 0),
+        .console_write = console_write_,
+        .changed = [this](const baker::Config&) { changed_since(); },
+        .log =
+            [](const baker::Error& e) {
+                godot::UtilityFunctions::push_warning("Baker: ", to_godot(baker::to_string(e)));
+            },
+    };
+    if (skip_local_) (void)options.open.skip.add("local");
+    if (auto r = live_->open(options); !r) {
+        live_.reset();
+        context_.reset();
+        return fail(r.error());
+    }
     return godot::OK;
 }
 
 void BakerRuntime::_process(double) {
     if constexpr (!baker::kShipping) {
-        if (console_) console_->poll();
         if (!tool_args_.empty() && ++tool_frames_ == 2) run_tool_command();
-        if (!config_) return;
-        if (watch_ && godot::OS::get_singleton()->is_debug_build()) poll();
+        if (!live_) return;
+        live_->begin_frame();  // reloads what was saved; answers the console
         if (capturing_ && session_dirty_) {
             session_dirty_ = false;
             godot::EngineDebugger::get_singleton()->send_message("baker:session",
@@ -256,23 +260,9 @@ void BakerRuntime::read_arguments() {
     }
 }
 
-baker::Context* BakerRuntime::context() {
-    if (!config_) return nullptr;
-    if (!context_) {
-        auto ctx = std::make_unique<baker::Context>();
-        if (auto r = baker::bind_config_tools(*ctx, *config_, {.allow_write = console_write_});
-            !r) {
-            (void)fail(r.error());
-            return nullptr;
-        }
-        context_ = std::move(ctx);
-    }
-    return context_.get();
-}
-
 std::string BakerRuntime::answer(const std::string& line) {
-    baker::Context* ctx = context();
-    if (!ctx) return "error: no project is open";
+    if (!live_) return "error: no project is open";
+    baker::Context* ctx = context_.get();
     std::string reply;
     if (const size_t first = line.find_first_not_of(" \t");
         first != std::string::npos && line[first] == '(') {
@@ -283,7 +273,7 @@ std::string BakerRuntime::answer(const std::string& line) {
         reply = r ? "=> " + baker::to_string(*r) : std::string(baker::describe(r.error()));
         if (!reply.empty() && reply.back() == '\n') reply.pop_back();
     }
-    changed();  // a command may have changed the data
+    changed_since();  // a command may have changed the data
     return reply;
 }
 
@@ -296,18 +286,17 @@ String BakerRuntime::eval_request(const String& line) {
 }
 
 int BakerRuntime::get_console_port() const {
-    return console_ ? int(console_->port()) : 0;
+    return live_ ? int(live_->console_port()) : 0;
 }
 
 // --baker COMMAND: runs once the scene is ready, its bound properties' tweaks registered,
 // then quits with the command's status.
 void BakerRuntime::run_tool_command() {
     ToolResult r;
-    baker::Context* ctx = context();
-    if (!ctx)
+    if (!live_)
         r = {2, {}, "baker: " + to_std(last_error_) + "\n"};
     else
-        r = run_tool(tool_args_, *config_, *ctx);
+        r = run_tool(tool_args_, live_->config(), *context_);
     std::fwrite(r.out.data(), 1, r.out.size(), stdout);
     std::fflush(stdout);
     std::fwrite(r.err.data(), 1, r.err.size(), stderr);
@@ -340,64 +329,23 @@ void BakerRuntime::set_project_writes(bool writes) {
     project_writes_ = writes;
 }
 
-// The files the stack was read from, includes and files looked for and missed too. A file
-// already watched keeps its stamp, so an edit made since it was taken is still seen; a new
-// one is stamped now. Remade as soon as the list changes (stack_files_epoch).
-void BakerRuntime::watch_files() {
-    if constexpr (!baker::kShipping) {
-        if (!config_ || config_->stack_files_epoch() == watched_epoch_) return;
-        std::vector<Watched> old = std::move(watched_);
-        watched_.clear();
-        for (const baker::StackFile& f : config_->stack_files()) {
-            std::string path(f.path.str());
-            FileStamp stamp;
-            bool known = false;
-            for (const Watched& w : old)
-                if (w.path == path) stamp = w.stamp, known = true;
-            if (!known) stamp = file_stamp(path);
-            watched_.push_back({std::move(path), stamp});
-        }
-        watched_epoch_ = config_->stack_files_epoch();
-    }
-}
-
-// Each frame, one stat per file the stack was read from: a changed one reloads, with its
-// write time as the edit's origin.
-void BakerRuntime::poll() {
-    watch_files();
-    bool changed_on_disk = false;
-    int64_t newest = 0;
-    for (Watched& w : watched_) {
-        const FileStamp s = file_stamp(w.path);
-        if (s == w.stamp) continue;
-        w.stamp = s;
-        if (s.exists && (!changed_on_disk || s.time_ns > newest)) newest = s.time_ns;
-        changed_on_disk = true;
-    }
-    if (!changed_on_disk) return;
-    const baker::ReloadRequest request{.trigger = "watcher",
-                                       .origin_ns = newest ? steady_from_file_time(newest) : 0};
-    auto r = config_->reload(request);
-    if (!r)
-        (void)fail(r.error());
-    else if (*r)
-        changed();
-}
-
 void BakerRuntime::present() {
-    if (config_) config_->mark_visible();
+    if (live_) live_->end_frame();
 }
 
 bool BakerRuntime::reload() {
-    if (!config_) return false;
-    auto r = config_->reload({.trigger = "script"});
-    if (!r) return fail(r.error()), false;
-    if (*r) changed();
-    return *r;
+    if (!live_) return false;
+    const bool reloaded = live_->reload_now();
+    changed_since();
+    return reloaded;
+}
+
+void BakerRuntime::changed_since() {
+    if (live_ && live_->config().epoch() != seen_epoch_) changed();
 }
 
 void BakerRuntime::changed() {
-    watch_files();
+    if (live_) seen_epoch_ = live_->config().epoch();
     session_dirty_ = true;
     cache_.clear();
     emit_signal("changed");
@@ -411,37 +359,37 @@ godot::Error BakerRuntime::fail(const baker::Error& error) {
 
 Array BakerRuntime::get_layers() const {
     Array out;
-    if (!config_) return out;
-    for (baker::Symbol name : config_->layers()) {
+    if (!config()) return out;
+    for (baker::Symbol name : config()->layers()) {
         Dictionary d;
         d["name"] = name_of(name);
-        d["enabled"] = config_->layer_enabled(name.str());
+        d["enabled"] = config()->layer_enabled(name.str());
         out.push_back(d);
     }
     return out;
 }
 
 godot::Error BakerRuntime::set_layer_enabled(const String& layer, bool enabled) {
-    if (!config_) return godot::ERR_UNCONFIGURED;
+    if (!config()) return godot::ERR_UNCONFIGURED;
     const std::string name = to_std(layer);
-    if (config_->layer_enabled(name) == enabled) return godot::OK;
-    if (auto r = config_->set_layer_enabled(name, enabled); !r) return fail(r.error());
+    if (config()->layer_enabled(name) == enabled) return godot::OK;
+    if (auto r = config()->set_layer_enabled(name, enabled); !r) return fail(r.error());
     changed();
     return godot::OK;
 }
 
 bool BakerRuntime::toggle_layer(const String& layer) {
-    if (!config_) return false;
-    auto r = config_->toggle_layer(to_std(layer));
+    if (!config()) return false;
+    auto r = config()->toggle_layer(to_std(layer));
     if (!r) return fail(r.error()), false;
     changed();
     return *r;
 }
 
 Variant BakerRuntime::get_value(const String& path, const Variant& fallback) const {
-    if (!config_) return fallback;
+    if (!config()) return fallback;
     const baker::Path p(to_std(path));
-    auto r = config_->get<RawValues>(p, RawValues{});
+    auto r = config()->get<RawValues>(p, RawValues{});
     if (!r) {
         godot::UtilityFunctions::push_warning("Baker: ", to_godot(baker::to_string(r.error())));
         return fallback;
@@ -460,15 +408,15 @@ Variant BakerRuntime::tweak(const String& path, const Variant& fallback) {
 
 Dictionary BakerRuntime::source(const String& path) const {
     Dictionary d;
-    if (!config_) return d;
-    if (auto s = config_->source(baker::Path(to_std(path)))) put_source(d, *s);
+    if (!config()) return d;
+    if (auto s = config()->source(baker::Path(to_std(path)))) put_source(d, *s);
     return d;
 }
 
 Array BakerRuntime::explain(const String& path) const {
     Array out;
-    if (!config_) return out;
-    auto entries = config_->explain(baker::Path(to_std(path)));
+    if (!config()) return out;
+    auto entries = config()->explain(baker::Path(to_std(path)));
     if (!entries) return out;
     for (const baker::ExplainEntry& e : *entries) {
         Dictionary d;
@@ -482,7 +430,7 @@ Array BakerRuntime::explain(const String& path) const {
 }
 
 godot::Error BakerRuntime::set_value(const String& path, const Variant& value) {
-    if (!config_) return godot::ERR_UNCONFIGURED;
+    if (!config()) return godot::ERR_UNCONFIGURED;
     baker::ValueList values;
     if (!to_values(value, values)) {
         last_error_ =
@@ -491,7 +439,7 @@ godot::Error BakerRuntime::set_value(const String& path, const Variant& value) {
         return godot::ERR_INVALID_PARAMETER;
     }
     if (auto r =
-            config_->set(baker::Path(to_std(path)), std::span<const baker::Node>(values.nodes()));
+            config()->set(baker::Path(to_std(path)), std::span<const baker::Node>(values.nodes()));
         !r)
         return fail(r.error());
     changed();
@@ -499,23 +447,23 @@ godot::Error BakerRuntime::set_value(const String& path, const Variant& value) {
 }
 
 godot::Error BakerRuntime::clear_scratch(const String& path) {
-    if (!config_) return godot::ERR_UNCONFIGURED;
-    if (auto r = config_->clear_scratch(to_std(path)); !r) return fail(r.error());
+    if (!config()) return godot::ERR_UNCONFIGURED;
+    if (auto r = config()->clear_scratch(to_std(path)); !r) return fail(r.error());
     changed();
     return godot::OK;
 }
 
 godot::PackedStringArray BakerRuntime::unsaved() const {
     godot::PackedStringArray out;
-    if (config_)
-        for (baker::Symbol path : config_->unsaved()) out.push_back(name_of(path));
+    if (config())
+        for (baker::Symbol path : config()->unsaved()) out.push_back(name_of(path));
     return out;
 }
 
 Array BakerRuntime::journal() const {
     Array out;
-    if (!config_) return out;
-    config_->journal([&](const baker::JournalEntry& e) {
+    if (!config()) return out;
+    config()->journal([&](const baker::JournalEntry& e) {
         Dictionary d;
         put_source(d, e.source);
         d["path"] = name_of(e.path);
@@ -528,17 +476,17 @@ Array BakerRuntime::journal() const {
 }
 
 godot::Error BakerRuntime::write_back(const String& path) {
-    if (!config_) return godot::ERR_UNCONFIGURED;
+    if (!config()) return godot::ERR_UNCONFIGURED;
     last_written_.clear();
-    auto r = config_->write_back(baker::Path(to_std(path)));
+    auto r = config()->write_back(baker::Path(to_std(path)));
     if (!r) return fail(r.error());
     return wrote(*r);
 }
 
 godot::Error BakerRuntime::write_back_to(const String& path, const String& layer) {
-    if (!config_) return godot::ERR_UNCONFIGURED;
+    if (!config()) return godot::ERR_UNCONFIGURED;
     last_written_.clear();
-    auto r = config_->write_back_to(baker::Path(to_std(path)), to_std(layer));
+    auto r = config()->write_back_to(baker::Path(to_std(path)), to_std(layer));
     if (!r) return fail(r.error());
     return wrote(*r);
 }
@@ -557,8 +505,8 @@ godot::Error BakerRuntime::wrote(const baker::WriteReport& report) {
 
 Array BakerRuntime::layer_effect(const String& layer) const {
     Array out;
-    if (!config_) return out;
-    auto entries = config_->layer_effect(to_std(layer));
+    if (!config()) return out;
+    auto entries = config()->layer_effect(to_std(layer));
     if (!entries) return out;
     for (const baker::LayerEffectEntry& e : *entries) {
         Dictionary d;
@@ -576,11 +524,11 @@ Dictionary BakerRuntime::session() const {
     Dictionary out;
     out["layers"] = get_layers();
     Array unsaved;
-    if (config_) {
+    if (config()) {
         // For each unsaved path, its oldest journal entry since it was last written or
         // reverted: the value before tuning, and where it came from.
         Dictionary first;
-        config_->journal([&](const baker::JournalEntry& e) {
+        config()->journal([&](const baker::JournalEntry& e) {
             const String path = name_of(e.path);
             if (e.fate == baker::EditFate::Written || e.fate == baker::EditFate::Reverted) {
                 first.erase(path);
@@ -593,7 +541,7 @@ Dictionary BakerRuntime::session() const {
             d["before"] = journal_value(e.before, e.before_count);
             first[path] = d;
         });
-        for (baker::Symbol path : config_->unsaved()) {
+        for (baker::Symbol path : config()->unsaved()) {
             const String p = name_of(path);
             Dictionary d = first.has(p) ? Dictionary(first[p]) : Dictionary();
             d["path"] = p;
@@ -608,8 +556,8 @@ Dictionary BakerRuntime::session() const {
 
 Dictionary BakerRuntime::loop_stats() const {
     Dictionary d;
-    if (!config_) return d;
-    const baker::LoopStats stats = config_->loop_stats();
+    if (!config()) return d;
+    const baker::LoopStats stats = config()->loop_stats();
     d["reloads"] = stats.reloads;
     d["unchanged"] = stats.unchanged;
     d["failures"] = stats.failures;
