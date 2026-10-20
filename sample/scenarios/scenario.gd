@@ -1,16 +1,15 @@
 ## A scenario: drives the player without a person and judges the run by its objectives.
-##
-##   godot --headless --path sample -- --scenario NAME [--out FILE]
-##
-## Prints one line of JSON (schema baker-godot.scenario/1: the scenario, whether it
-## passed, each objective's value and verdict, and the layers it ran with), writes it to
-## FILE too with --out, and quits with 0 if every objective passed, 1 if not. A scenario
-## runs without the `local` layer, so its result does not depend on whose machine it is on.
+## The runner (runner.gd) adds one to a fresh instance of the main scene; it calls finish()
+## once with its objectives.
 extends Node
+
+## The run, as one entry of stacks.sim/1.1's "runs".
+signal finished(run: Dictionary)
 
 var player: CharacterBody2D
 var _jumping := false
 var _move := 0.0
+var _steps := 0
 
 
 func _ready() -> void:
@@ -18,6 +17,10 @@ func _ready() -> void:
 	player.input_source = func() -> Dictionary:
 		return {"move": _move, "jump": _jumping}
 	run.call_deferred()
+
+
+func _physics_process(_delta: float) -> void:
+	_steps += 1
 
 
 ## Overridden by each scenario: drive the player, then finish() with the objectives.
@@ -45,23 +48,15 @@ func jump_apex() -> float:
 	return apex
 
 
-## objectives: [{name, desc, value, pass}].
+## objectives: [{name, value, pass}].
 func finish(objectives: Array) -> void:
-	var passed := objectives.all(func(o): return o["pass"])
-	var layers := Baker.get_layers().filter(func(l): return l["enabled"] and l["name"] != "scratch")
-	var line := JSON.stringify({
-		"schema": "baker-godot.scenario/1",
+	var results := objectives.map(func(o): return {
+		"name": o["name"], "value": o["value"], "pass": o["pass"], "over": "seed", "error": ""})
+	finished.emit({
 		"scenario": get_script().resource_path.get_file().get_basename(),
-		"passed": passed,
-		"objectives": objectives,
-		"layers": layers.map(func(l): return l["name"]),
-		"shipping": BakerRuntime.is_shipping(),
+		"seed": 1,
+		"steps": _steps,
+		"passed": objectives.all(func(o): return o["pass"]),
+		"errors": [],
+		"objectives": results,
 	})
-	print(line)
-	var args := OS.get_cmdline_user_args()
-	var at := args.find("--out")
-	if at >= 0 and at + 1 < args.size():
-		var f := FileAccess.open(args[at + 1], FileAccess.WRITE)
-		if f:
-			f.store_line(line)
-	get_tree().quit(0 if passed else 1)

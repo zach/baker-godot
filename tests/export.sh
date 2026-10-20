@@ -30,15 +30,15 @@ check() {
     if [ "$1" -eq 0 ]; then echo "ok   $2"; else echo "FAIL $2"; failures=$((failures + 1)); fi
 }
 [ -f "$game" ]; check $? "exports $preset"
-timeout 60 "$game" --headless -- --scenario jump --out "$work/jump.json" >/dev/null 2>&1
+timeout 60 "$game" --headless -- --scenario jump --out "$work/sim" >/dev/null 2>&1
 check $? "the exported game runs the jump scenario"
-"$py" - "$work/jump.json" <<'PY'
+"$py" - "$work/sim/results.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
-print("     ", json.dumps(d))
-assert d["passed"] and d["shipping"], d
-assert d["layers"] == ["default", "agent"], d  # a scenario leaves out local, in exports too
-assert abs(d["objectives"][0]["value"] - 96) <= 2, d  # tuning.dta's height, not the scene's 80
+print("     ", json.dumps(d["host"]), json.dumps(d["runs"][0]["objectives"]))
+assert d["status"] == "passed" and d["host"]["shipping"], d
+assert d["host"]["layers"] == ["default", "agent"], d  # a scenario leaves out local, in exports too
+assert abs(d["runs"][0]["objectives"][0]["value"] - 96) <= 2, d  # tuning.dta's, not the scene's 80
 PY
 check $? "  a shipping build, tuning.dta's values read from the package, without local"
 echo "$failures failure(s)"

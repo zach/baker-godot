@@ -5,8 +5,9 @@
 #
 #   tests/agent.sh path/to/godot
 #
+#  0. baker-bridge.json's commands run, and give the schemas it names;
 #  1. check, and the vocabulary with the bound properties as tweaks;
-#  2. the `reach` scenario fails on the shipped data;
+#  2. the `reach` scenario fails on the shipped data (stacks.sim/1.1 results);
 #  3. a proposal in agent.dta: check passes, diff shows it, `reach` and `jump` pass;
 #  4. A/B in the running game over the console: explain, toggle the agent layer, journal;
 #  5. promote --patch writes a one-line patch to tuning.dta and changes nothing; it applies.
@@ -31,12 +32,20 @@ tool() {  # tool OUT ARGS...: a tool command, its output in $work/OUT
     local out="$1"; shift
     timeout 60 "$godot" --headless --path "$work" -- --baker "$@" --out "$work/$out" >/dev/null 2>&1
 }
-scenario() {  # scenario NAME OUT
-    timeout 60 "$godot" --headless --path "$work" -- --scenario "$1" --out "$work/$2" >/dev/null 2>&1
+scenario() {  # scenario OUTDIR NAME...: the runs' stacks.sim/1.1 results in $work/OUTDIR
+    local out="$1"; shift
+    local args=()
+    for name in "$@"; do args+=(--scenario "$name"); done
+    timeout 60 "$godot" --headless --path "$work" -- "${args[@]}" --out "$work/$out" >/dev/null 2>&1
 }
 json() {  # json FILE PYTHON-EXPRESSION-OF-d: exit 0 if true
     "$py" -c "import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if ($2) else 1)" "$work/$1"
 }
+
+# 0. The bridge entry's own commands work, and give the schemas it names.
+native() { cygpath -m "$1" 2>/dev/null || echo "$1"; }  # Windows Python reads C:/..., not /c/...
+"$py" "$here/tests/bridge_entry.py" "$(native "$work")" "$(native "$godot")" | grep -v "failure(s)"
+check "${PIPESTATUS[0]}" "the bridge entry drives the game"
 
 # 1.
 tool check.json check --json; check $? "check passes"
@@ -46,9 +55,11 @@ json ref.json 'any(t["path"] == "player.jump.height" for t in d["tweaks"]["tweak
 check $? "  lists the bound properties as tweaks"
 
 # 2.
-scenario reach before.json; status=$?
+scenario before reach; status=$?
 [ "$status" -eq 1 ]; check $? "reach fails on the shipped data"
-json before.json 'd["objectives"][0]["value"] < 110 and d["layers"] == ["default", "agent"]'
+json before/results.json 'd["schema"] == "stacks.sim/1.1" and d["status"] == "failed"'
+check $? "  as stacks.sim/1.1 results"
+json before/results.json 'd["runs"][0]["objectives"][0]["value"] < 110 and d["host"]["layers"] == ["default", "agent"]'
 check $? "  short of 110 px, run without the local layer"
 
 # 3.
@@ -57,8 +68,9 @@ printf '; The agent: a higher jump, to clear the first platform.\n(player (jump 
 tool check2.json check --json; check $? "check passes with the proposal"
 tool diff.txt diff; grep -q "player.jump.height  96 -> 120" "$work/diff.txt"
 check $? "diff: $(grep player "$work/diff.txt" | xargs)"
-scenario reach after.json; check $? "reach passes with the proposal"
-scenario jump jump.json; check $? "jump peaks at the proposed height"
+scenario after reach jump; check $? "reach and jump pass with the proposal, in one run"
+json after/results.json '[r["scenario"] for r in d["runs"]] == ["jump", "reach"] and d["status"] == "passed"'
+check $? "  each scenario a run of its own"
 
 # 4.
 port=$("$py" -c "import socket; s=socket.socket(); s.bind(('127.0.0.1',0)); print(s.getsockname()[1])")

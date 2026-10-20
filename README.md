@@ -82,10 +82,12 @@ MCP bridge of baker-mcp is planned against; the bridge itself is not built yet.
 
   `--out FILE` writes the result to a file too. `promote` writes nothing but the patch: a
   person applies it (`git apply -p1`) or keeps the values from the editor.
-- **Scenarios** drive the player and judge the run by written objectives:
-  `-- --scenario reach` (does a jump clear the first platform?) and `-- --scenario jump`.
-  Each prints one line of JSON (`baker-godot.scenario/1`) and exits 1 if an objective
-  failed.
+- **Scenarios** drive the player and judge each run by written objectives, reported as
+  the stacks' `sim` command reports them: `-- --scenario reach --scenario jump --out DIR`
+  runs each in a fresh scene and writes `DIR/results.json` (`stacks.sim/1.1`, with a
+  `host` object giving the layers and whether the build ships). The exit status is 1 if a
+  run failed. `reach` asks whether a jump clears the first platform; the shipped data's
+  does not.
 - **The agent layer.** An agent proposes in `data/agent.dta`, which version control
   ignores; `check`, `diff` and the scenarios then judge the proposal.
 - **The running game's console**, on 127.0.0.1 only: `-- --console-port 7000`. A line
@@ -93,6 +95,11 @@ MCP bridge of baker-mcp is planned against; the bridge itself is not built yet.
   Config tools are bound (`config.explain`, `config.set`, `config.toggle`,
   `config.journal`, ...); the ones that write files only with `--console-write`.
   `tests/console.py` is a client.
+
+**The bridge entry.** `sample/baker-bridge.json` says how a bridge drives this game: the
+argument lists for the tool commands, the scenario runs, and the console, where each
+result is written, and which schema it has. Its format is this repository's proposal:
+baker-mcp's bridge, when it is built, may define its own.
 
 Tool commands and scenarios leave out the `local` layer, so their results do not depend on
 whose machine runs them. `tests/agent.sh` runs an agent's loop end to end: `reach` fails,

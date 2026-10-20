@@ -1,7 +1,7 @@
 ## The sample level: a floor, some platforms, the player, and a line of help.
 ##
 ## F1 toggles the `floaty` experiment layer while playing. Run with
-## `-- --scenario NAME` to play a scenario from res://scenarios/ instead of the keyboard.
+## `-- --scenario NAME`... to play scenarios from res://scenarios/ instead of the keyboard.
 extends Node2D
 
 const PLATFORMS := [
@@ -21,20 +21,19 @@ func _ready() -> void:
 		_add_platform(rect)
 	Baker.changed.connect(_show_layers)
 	_show_layers()
-	var scenario := _scenario_name()
-	if scenario != "":
-		add_child(load("res://scenarios/%s.gd" % scenario).new())
+	_run_scenarios()
 
 
-## --scenario NAME or --scenario=NAME, after `--`.
-func _scenario_name() -> String:
-	var args := OS.get_cmdline_user_args()
-	for i in args.size():
-		if args[i].begins_with("--scenario="):
-			return args[i].get_slice("=", 1)
-		if args[i] == "--scenario" and i + 1 < args.size():
-			return args[i + 1]
-	return ""
+## Under --scenario NAME..., each fresh instance of this scene runs the next scenario
+## (scenarios/runner.gd), the runner kept above the scene across reloads.
+func _run_scenarios() -> void:
+	var runner := get_tree().root.get_node_or_null("ScenarioRunner")
+	if runner == null:
+		runner = preload("res://scenarios/runner.gd").from_arguments()
+		if runner == null:
+			return
+		get_tree().root.add_child.call_deferred(runner)
+	runner.attach.call_deferred(self)
 
 
 func _unhandled_input(event: InputEvent) -> void:

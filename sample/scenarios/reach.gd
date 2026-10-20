@@ -11,7 +11,6 @@ func run() -> void:
 	var apex := await jump_apex()
 	finish([{
 		"name": "reach.first_platform",
-		"desc": "One held jump from the floor rises %d px: the first platform and %d px to spare" % [PLATFORM + SPARE, SPARE],
 		"value": snappedf(apex, 0.01),
 		"pass": apex >= PLATFORM + SPARE,
 	}])
