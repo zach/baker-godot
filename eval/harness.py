@@ -81,7 +81,8 @@ directory. A person writes:
 
 
 def run_godot(godot, sample, args, timeout=180):
-    return subprocess.run([str(godot), "--headless", "--path", str(sample), "--", *args],
+    return subprocess.run([str(godot), "--headless", "--fixed-fps", "60", "--path", str(sample),
+                           "--", *args],
                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                           timeout=timeout).returncode
 

@@ -33,7 +33,7 @@ tool() {  # tool OUT ARGS...: a tool command, its output in $work/OUT
     timeout 60 "$godot" --headless --path "$work" -- --baker "$@" --out "$work/$out" >/dev/null 2>&1
 }
 sim() {  # sim OUTDIR: every scenario over seeds 1-3, stacks.sim/1.1 in $work/OUTDIR
-    timeout 120 "$godot" --headless --path "$work" -- --baker sim --seeds 1-3 --out "$work/$1" \
+    timeout 120 "$godot" --headless --fixed-fps 60 --path "$work" -- --baker sim --seeds 1-3 --out "$work/$1" \
         >/dev/null 2>&1
 }
 compare() {  # compare BEFORE AFTER OUT: stacks.compare/1.1 in $work/OUT

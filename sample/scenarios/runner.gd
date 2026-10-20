@@ -1,7 +1,7 @@
 ## The sample's simulation commands, as the stacks' game binaries have them:
 ##
-##   godot --headless --path sample -- --baker sim [--scenario NAME]... [--seeds A-B]
-##                                                 [--out DIR] [--json]
+##   godot --headless --fixed-fps 60 --path sample -- --baker sim [--scenario NAME]...
+##                                         [--seeds A-B] [--out DIR] [--json]
 ##   godot --headless --path sample -- --baker compare BEFORE_DIR AFTER_DIR
 ##
 ## sim runs each scenario (every one in res://scenarios/ unless named) once per seed, each
@@ -11,8 +11,9 @@
 ## ships); --out DIR writes that JSON to DIR/results.json. Exit status: 0 if every run
 ## passed, 1 if an objective failed, 2 if something could not run. Nothing in a run reads
 ## the clock or draws a random number: the same data, scenario and seed give the same
-## result. Runs leave out the `local` layer, so they do not depend on whose machine they
-## ran on.
+## result. Under --fixed-fps 60 a run takes only as long as the game needs to compute it,
+## with the same results; without it, Godot paces frames by the clock. Runs leave out the
+## `local` layer, so they do not depend on whose machine they ran on.
 ##
 ## compare reads two sim --out directories and says, per objective, whether it broke (passed
 ## on a scenario and seed, now fails), was fixed, or stayed the same, as JSON (schema

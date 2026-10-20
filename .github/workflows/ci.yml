@@ -57,7 +57,7 @@ jobs:
         run: godot/${{ matrix.godot }} --headless --path sample res://tests/runtime_test.tscn
       - name: Scenario jump
         timeout-minutes: 2
-        run: godot/${{ matrix.godot }} --headless --path sample -- --baker sim --scenario jump
+        run: godot/${{ matrix.godot }} --headless --fixed-fps 60 --path sample -- --baker sim --scenario jump
       - name: The demonstration, in a headless editor
         timeout-minutes: 5
         run: tests/e2e.sh "$PWD/godot/${{ matrix.godot }}"

@@ -79,7 +79,7 @@ carry over.
   ```sh
   godot --headless --path sample -- --baker check --json         # baker.check/1
   godot --headless --path sample -- --baker reference --json     # vocabulary, tweaks, shapes
-  godot --headless --path sample -- --baker sim --seeds 1-3 --out runs/before
+  godot --headless --fixed-fps 60 --path sample -- --baker sim --seeds 1-3 --out runs/before
   godot --headless --path sample -- --baker compare runs/before runs/after
   godot --headless --path sample -- --baker eval --json "{config.explain player.jump.height}"
   godot --headless --path sample -- --baker diff                 # what agent.dta changes
@@ -93,7 +93,9 @@ carry over.
   the build ships), exit 1 if an objective failed. **`compare`** says which objectives broke
   or were fixed between two runs (`stacks.compare/1.1`), and exits 1 if one broke. `reach`
   asks whether a jump clears the first platform and stays below the second; the shipped
-  data's does not clear it.
+  data's does not clear it. With `--fixed-fps 60`, Godot runs frames as fast as it can,
+  each 1/60 s of game time: the same results, about 20 times sooner than at the clock's
+  pace.
 - **The agent layer.** An agent proposes in `data/agent.dta`, which version control
   ignores. `promote` writes nothing but a patch: a person applies it (`git apply -p1`) or
   keeps the values from the editor.
@@ -112,7 +114,7 @@ that applies as a one-line diff.
 ## Exports
 
 A release export is a Baker shipping build: the data is packed (`export_presets.cfg`
-includes `*.dta`) and read as text, without caches, which are tied to Baker's version and
+includes `*.dta`, and excludes `data/agent.dta`, an agent's unreviewed proposal) and read as text, without caches, which are tied to Baker's version and
 pointer size. It does not reload, take live edits, write, or open a console.
 `tests/export.sh` exports the sample and runs `--baker sim` in the exported game: `sim` and
 `compare` work in shipping builds; the other commands and the console do not.
@@ -125,7 +127,7 @@ whole bundle.
 `floaty` (F1 while playing), and a headless scenario:
 
 ```sh
-godot --headless --path sample -- --baker sim           # the scenarios, judged
+godot --headless --fixed-fps 60 --path sample -- --baker sim   # the scenarios, judged
 godot --headless --path sample res://tests/runtime_test.tscn
 tests/e2e.sh path/to/godot                              # the demonstration, headless
 tests/agent.sh path/to/godot                            # an agent's loop

@@ -23,7 +23,9 @@ sample/player.gd, *.tscn          the game. Not yours: its bound properties read
 ## The commands
 
 Build the extension once (README, "Building"). Then, from the repository's root, with
-`G="godot --headless --path sample --"` (Godot 4.5). Godot runs the game in `sample/`, so a
+`G="godot --headless --fixed-fps 60 --path sample --"` (Godot 4.5; `--fixed-fps 60` runs the
+game's frames as fast as it can, each 1/60 s of game time, so `sim` gives the same results
+in a fraction of the time). Godot runs the game in `sample/`, so a
 relative path you give (`--out runs/before`, `compare`'s directories, `--patch`) is under
 `sample/`. Its banner comes first on stdout: read results from `--out` when you parse them.
 

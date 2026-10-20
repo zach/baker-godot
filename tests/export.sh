@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # An exported release build: the shipping library, the data packed and read as text.
 # Exports a copy of sample/ with the preset given, runs its scenarios, and checks the data's
-# values arrived (the jump peaks at tuning.dta's height, not the scene's) and that the game
-# ran as a shipping build. Needs Godot's export template for the preset's platform
+# values arrived (the jump peaks at tuning.dta's height, not the scene's, nor that of an
+# agent.dta left on the exporting machine) and that the game ran as a shipping build. Needs Godot's export template for the preset's platform
 # installed, and the template_release library built.
 #
 #   tests/export.sh path/to/godot [Linux|Windows]
@@ -16,6 +16,9 @@ trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/project"
 cp -r "$here/sample/." "$work/project/"
 rm -rf "$work/project/.godot"
+# An agent's proposal on the exporting machine: version control ignores it, and so must the
+# export, or the game ships a change no person reviewed.
+printf '(player (jump (height 300)))\n' > "$work/project/data/agent.dta"
 "$godot" --headless --path "$work/project" --import >/dev/null 2>&1 || true
 "$godot" --headless --path "$work/project" --import >/dev/null 2>&1
 mkdir -p "$work/out"
@@ -30,7 +33,7 @@ check() {
     if [ "$1" -eq 0 ]; then echo "ok   $2"; else echo "FAIL $2"; failures=$((failures + 1)); fi
 }
 [ -f "$game" ]; check $? "exports $preset"
-timeout 60 "$game" --headless -- --baker sim --scenario jump --out "$work/sim" >/dev/null 2>&1
+timeout 60 "$game" --headless --fixed-fps 60 -- --baker sim --scenario jump --out "$work/sim" >/dev/null 2>&1
 check $? "the exported game runs the jump scenario"
 "$py" - "$work/sim/results.json" <<'PY'
 import json, sys
@@ -40,6 +43,6 @@ assert d["status"] == "passed" and d["host"]["shipping"], d
 assert d["host"]["layers"] == ["default", "agent"], d  # a scenario leaves out local, in exports too
 assert abs(d["runs"][0]["objectives"][0]["value"] - 96) <= 2, d  # tuning.dta's, not the scene's 80
 PY
-check $? "  a shipping build, tuning.dta's values read from the package, without local"
+check $? "  a shipping build, tuning.dta's values read from the package, without local or agent.dta"
 echo "$failures failure(s)"
 exit $((failures > 0))
