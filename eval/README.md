@@ -6,6 +6,10 @@ with headless Claude Code (2.1.304), model `claude-sonnet-5-5`.
 **Result: 9 of 9 runs succeeded,** each in 3 to 5 tool calls (3.3 on average) and about
 30 seconds, for $0.96 in all.
 
+**Rerun on Baker 0.2.0** (81c9547, the runtime on Baker's host loop), same protocol: 9 of 9
+again, in 2 to 5 tool calls (3.1 on average), for $1.04. That run's rows are not in
+`results.csv`, which keeps the first.
+
 ## Protocol
 
 - **Tasks** (`harness.py`): three, each a person's complaint over a fresh copy of the
