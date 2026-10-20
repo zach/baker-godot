@@ -10,6 +10,10 @@ with headless Claude Code (2.1.304), model `claude-sonnet-5-5`.
 again, in 2 to 5 tool calls (3.1 on average), for $1.04. That run's rows are not in
 `results.csv`, which keeps the first.
 
+**Rerun on Baker 0.2.1** (992464b: Baker's own tool commands, and `sim` under
+`--fixed-fps 60`), same protocol: 9 of 9, in 3 to 4 tool calls (3.1 on average), 17 s a
+run on average instead of about 31, for $0.95. Its rows are not in `results.csv` either.
+
 ## Protocol
 
 - **Tasks** (`harness.py`): three, each a person's complaint over a fresh copy of the
