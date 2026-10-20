@@ -10,6 +10,7 @@
 #  3. a proposal in agent.dta: check passes, diff shows it, `reach` and `jump` pass;
 #  4. A/B in the running game over the console: explain, toggle the agent layer, journal;
 #  5. promote --patch writes a one-line patch to tuning.dta and changes nothing; it applies.
+#     A patch or --out it cannot write (no directory; on Linux, /dev/full) exits 2.
 set -uo pipefail
 py="$(command -v python3 || command -v python)"
 godot="$1"
@@ -87,6 +88,15 @@ before=$(cat "$work/data/tuning.dta")
 tool promote.txt promote --to default --patch "$work/agent.patch"; check $? "promote --patch"
 [ "$before" == "$(cat "$work/data/tuning.dta")" ]; check $? "  writes no data"
 [ "$(grep -c '^[-+] ' "$work/agent.patch")" -eq 2 ]; check $? "  one line changed: $(grep '^+ ' "$work/agent.patch" | xargs)"
+fails() {  # fails ARGS...: a tool command that cannot write its output exits 2
+    timeout 60 "$godot" --headless --path "$work" -- --baker "$@" >/dev/null 2>&1
+    [ $? -eq 2 ]
+}
+fails promote --patch "$work/no-such-dir/agent.patch"; check $? "  a patch it cannot write fails"
+fails diff --out "$work/no-such-dir/diff.txt"; check $? "  so does --out"
+if [ -w /dev/full ]; then  # Linux: every write fails, as on a full disk
+    fails promote --patch /dev/full; check $? "  so does a full disk"
+fi
 (cd "$work" && git apply -p1 agent.patch); check $? "  it applies with git apply -p1"
 grep -q "(height 120)            ; apex above the takeoff" "$work/data/tuning.dta"
 check $? "  and keeps the line's comment"
