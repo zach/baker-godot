@@ -49,7 +49,8 @@ add_library(baker_godot SHARED
 target_link_libraries(baker_godot PRIVATE godot-cpp baker::baker)
 if(MSVC)
   target_compile_options(baker_godot PRIVATE /W4 /permissive- /utf-8 /EHs-c-)
-  target_compile_definitions(baker_godot PRIVATE _HAS_EXCEPTIONS=0)
+  # fopen is fine: every result is checked.
+  target_compile_definitions(baker_godot PRIVATE _HAS_EXCEPTIONS=0 _CRT_SECURE_NO_WARNINGS)
 else()
   target_compile_options(baker_godot PRIVATE -Wall -Wextra -Wpedantic -Wshadow -fno-exceptions)
 endif()
