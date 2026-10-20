@@ -162,6 +162,7 @@ private:
     std::unique_ptr<baker::host::Live> live_;
     static constexpr uint64_t kNoEpoch = ~uint64_t(0);
     uint64_t seen_epoch_ = kNoEpoch;  // the Config's epoch() when changed() last ran
+    uint64_t files_epoch_ = 0;        // stack_files_epoch() at open or the last frame
 
     // Tools and agents (debug builds).
     std::vector<std::string> tool_args_;  // --baker COMMAND ...: run once the scene is ready

@@ -214,6 +214,7 @@ godot::Error BakerRuntime::open(const String& project_path) {
         context_.reset();
         return fail(r.error());
     }
+    files_epoch_ = live_->config().stack_files_epoch();  // as Live watched them
     return godot::OK;
 }
 
@@ -222,6 +223,13 @@ void BakerRuntime::_process(double) {
         if (!tool_args_.empty() && ++tool_frames_ == 2) run_tool_command();
         if (!live_) return;
         live_->begin_frame();  // reloads what was saved; answers the console
+        // The stack's files changed (one appeared, an #include was added): Live watched them
+        // anew, which takes an edit made since the last poll for seen (requirement 0008).
+        // One reload catches it.
+        if (const uint64_t files = config()->stack_files_epoch(); files != files_epoch_) {
+            files_epoch_ = files;
+            (void)reload();
+        }
         if (capturing_ && session_dirty_) {
             session_dirty_ = false;
             godot::EngineDebugger::get_singleton()->send_message("baker:session",

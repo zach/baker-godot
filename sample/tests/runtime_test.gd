@@ -86,15 +86,13 @@ func run() -> void:
 		"tuning.dta is unchanged")
 	Baker.clear_scratch()
 
-	# An edit on disk is seen within a few frames.
+	# An edit on disk is seen within a few frames; within 100 ms for a file whose directory
+	# did not exist when the watch began (a first run), which the watcher checks by its stamp.
 	var f := FileAccess.open(LOCAL, FileAccess.WRITE)
 	f.store_string("(player (jump (height 110)))\n")
 	f.close()
-	for i in 10:
-		await get_tree().process_frame
-		if player.jump_height == 110.0:
-			break
-	check(player.jump_height == 110.0, "an edit on disk reloads within frames")
+	await until(func(): return player.jump_height == 110.0)
+	check(player.jump_height == 110.0, "an edit on disk reloads")
 	var stats := Baker.loop_stats()
 	check(stats["reloads"] >= 1, "loop_stats counts reloads: %s" % [stats])
 
@@ -105,21 +103,15 @@ func run() -> void:
 	f = FileAccess.open(LOCAL, FileAccess.WRITE)
 	f.store_string("#include \"inc.dta\"\n")
 	f.close()
-	for i in 10:
-		await get_tree().process_frame
-		if player.jump_height == 105.0:
-			break
+	await until(func(): return player.jump_height == 105.0)
 	check(player.jump_height == 105.0, "local.dta includes inc.dta: %s" % player.jump_height)
 	check(Baker.source("player.jump.height")["file"] == "user://baker/inc.dta",
 		"source() names the include as written: %s" % [Baker.source("player.jump.height")])
 	f = FileAccess.open("user://baker/inc.dta", FileAccess.WRITE)
 	f.store_string("(player (jump (height 104)))\n")
 	f.close()
-	for i in 10:
-		await get_tree().process_frame
-		if player.jump_height == 104.0:
-			break
-	check(player.jump_height == 104.0, "an edit to the included file reloads within frames")
+	await until(func(): return player.jump_height == 104.0)
+	check(player.jump_height == 104.0, "an edit to the included file reloads")
 	f = FileAccess.open(LOCAL, FileAccess.WRITE)
 	f.store_string("")
 	f.close()
@@ -151,3 +143,10 @@ func run() -> void:
 	await get_tree().process_frame
 	check(Baker.set_value("player.jump.height", 130.0) == OK, "edits after the node is freed")
 	Baker.clear_scratch()
+
+
+## Waits a frame at a time, up to a second, until `condition` holds.
+func until(condition: Callable) -> void:
+	var end := Time.get_ticks_msec() + 1000
+	while not condition.call() and Time.get_ticks_msec() < end:
+		await get_tree().process_frame
