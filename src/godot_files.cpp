@@ -7,6 +7,8 @@
 #include <godot_cpp/classes/os.hpp>
 #include <godot_cpp/classes/project_settings.hpp>
 
+#include <cstdio>
+
 namespace baker_godot {
 
 namespace {
@@ -46,6 +48,14 @@ bool write_file(std::string_view path, std::string_view text, bool project) {
     bytes.resize(int64_t(text.size()));
     for (size_t i = 0; i < text.size(); ++i) bytes.set(int64_t(i), uint8_t(text[i]));
     return f->store_buffer(bytes);
+}
+
+bool write_output(const std::string& path, std::string_view text) {
+    if (path.find("://") != std::string::npos) return write_file(path, text, true);
+    std::FILE* f = std::fopen(path.c_str(), "wb");
+    if (!f) return false;
+    const bool ok = std::fwrite(text.data(), 1, text.size(), f) == text.size();
+    return std::fclose(f) == 0 && ok;
 }
 
 bool disk_path(std::string_view path, std::string& out) {

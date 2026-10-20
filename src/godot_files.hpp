@@ -22,6 +22,10 @@ namespace baker_godot {
 // editor's own writes) any: a game never writes into the project, which the editor owns.
 [[nodiscard]] bool write_file(std::string_view path, std::string_view text, bool project);
 
+// Writes a tool's output: a res:// or user:// path, or one on the disk as given (relative to
+// where the tool runs).
+[[nodiscard]] bool write_output(const std::string& path, std::string_view text);
+
 // Where a path Baker names is on the disk, for the watcher: none for a file Godot packs.
 [[nodiscard]] bool disk_path(std::string_view path, std::string& out);
 

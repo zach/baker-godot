@@ -86,7 +86,9 @@ carry over.
   godot --headless --path sample -- --baker promote --patch agent.patch
   ```
 
-  `--out FILE` writes a tool command's result to a file too.
+  These are Baker's own tool commands (its host kit), reading through Godot's file access.
+  `--out FILE` writes a command's result to a file too (a `user://` path as well); `promote`
+  never writes into the project: `--patch` gives the change for a person to apply.
 - **`sim`** runs the scenarios in `sample/scenarios/` (all unless `--scenario NAME`), each
   run in a fresh scene, and judges each by its objectives: results as `stacks.sim/1.1` (in
   `DIR/results.json` with `--out DIR`; with a `host` object giving the layers and whether
@@ -114,8 +116,11 @@ that applies as a one-line diff.
 ## Exports
 
 A release export is a Baker shipping build: the data is packed (`export_presets.cfg`
-includes `*.dta`, and excludes `data/agent.dta`, an agent's unreviewed proposal) and read as text, without caches, which are tied to Baker's version and
-pointer size. It does not reload, take live edits, write, or open a console.
+includes `*.dta`) and read as text, without caches, which are tied to Baker's version and
+pointer size. It does not reload, take live edits, write, or open a console. The plugin's
+export step leaves out the files of the layers `baker-project.dta` marks `dev_only`, such
+as `data/agent.dta`, an agent's unreviewed proposal, which a shipping build would not read
+anyway.
 `tests/export.sh` exports the sample and runs `--baker sim` in the exported game: `sim` and
 `compare` work in shipping builds; the other commands and the console do not.
 `tools/fetch_template.py` installs one platform's export template without downloading the
@@ -139,7 +144,7 @@ step (run it under a display, such as `xvfb-run`).
 
 ## Building
 
-CMake fetches godot-cpp (4.5) and Baker 0.2.0 (its core and its host kit), and puts the library in
+CMake fetches godot-cpp (4.5) and Baker 0.2.1 (its core and its host kit), and puts the library in
 `sample/addons/baker/bin/`:
 
 ```sh

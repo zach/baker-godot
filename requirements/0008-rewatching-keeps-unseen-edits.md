@@ -1,5 +1,8 @@
 # 0008: Watching a new list of files keeps an edit not yet seen
 
+**Shipped** in Baker 0.2.1 (a file that stays in the watcher's list keeps what was last seen
+of it); this integration has dropped its reload on a change of the list.
+
 ## The need
 
 When the watcher is given a new list of files (the stack read a new file, a missing one

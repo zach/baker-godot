@@ -7,11 +7,13 @@ const Session := preload("res://addons/baker/session.gd")
 const Debugger := preload("res://addons/baker/debugger.gd")
 const Dock := preload("res://addons/baker/dock.gd")
 const Inspector := preload("res://addons/baker/inspector.gd")
+const Export := preload("res://addons/baker/export.gd")
 
 var model: Session
 var debugger: Debugger
 var dock: Dock
 var inspector: Inspector
+var export: Export
 
 
 func _enter_tree() -> void:
@@ -23,6 +25,8 @@ func _enter_tree() -> void:
 	add_control_to_dock(DOCK_SLOT_RIGHT_BL, dock)
 	inspector = Inspector.new(model)
 	add_inspector_plugin(inspector)
+	export = Export.new()
+	add_export_plugin(export)
 	scene_changed.connect(func(_root): dock.refresh_tweaks())
 	if OS.get_environment("BAKER_E2E") == "1":
 		var e2e: Node = load("res://tests/e2e.gd").new()
@@ -33,6 +37,7 @@ func _enter_tree() -> void:
 
 
 func _exit_tree() -> void:
+	remove_export_plugin(export)
 	remove_inspector_plugin(inspector)
 	remove_control_from_docks(dock)
 	dock.queue_free()

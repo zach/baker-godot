@@ -22,7 +22,9 @@
 //   --console-port N    Baker's loopback console, with the Config tools bound:
 //                       {config.explain p}, {config.set p v}, {config.toggle layer}, ...
 //   --console-write     also config.write_back and config.promote
-//   --baker COMMAND...  run a tool command once the scene is ready, then quit (tools.hpp);
+//   --baker COMMAND...  run one of Baker's tool commands (check, reference, eval, diff,
+//                       promote --patch) once the scene is ready, then quit; --out FILE
+//                       writes its output there too;
 //                       sim and compare are the scene's (scenarios/runner.gd)
 //   --no-local          leave out the `local` layer; every --baker command does, in shipping
 //                       builds too
@@ -116,6 +118,9 @@ public:
     [[nodiscard]] int get_console_port() const;
     // A shipping build (an export): no reloads, live edits, write-back, console or tools.
     [[nodiscard]] static bool is_shipping() { return baker::kShipping; }
+    // The files of the layers a project file marks dev_only, as Godot paths: what an export
+    // leaves out. Empty if the project file does not read.
+    [[nodiscard]] static godot::PackedStringArray dev_only_files(const godot::String& project_path);
 
     // --- Telemetry. ---
     // {reloads, unchanged, failures, files: [...], layers: [...]}, times in milliseconds.
@@ -162,7 +167,6 @@ private:
     std::unique_ptr<baker::host::Live> live_;
     static constexpr uint64_t kNoEpoch = ~uint64_t(0);
     uint64_t seen_epoch_ = kNoEpoch;  // the Config's epoch() when changed() last ran
-    uint64_t files_epoch_ = 0;        // stack_files_epoch() at open or the last frame
 
     // Tools and agents (debug builds).
     std::vector<std::string> tool_args_;  // --baker COMMAND ...: run once the scene is ready

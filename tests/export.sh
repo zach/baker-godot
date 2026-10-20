@@ -17,7 +17,8 @@ mkdir -p "$work/project"
 cp -r "$here/sample/." "$work/project/"
 rm -rf "$work/project/.godot"
 # An agent's proposal on the exporting machine: version control ignores it, and so must the
-# export, or the game ships a change no person reviewed.
+# export (the project file marks its layer dev_only), or the game ships a change no person
+# reviewed.
 printf '(player (jump (height 300)))\n' > "$work/project/data/agent.dta"
 "$godot" --headless --path "$work/project" --import >/dev/null 2>&1 || true
 "$godot" --headless --path "$work/project" --import >/dev/null 2>&1
@@ -40,9 +41,11 @@ import json, sys
 d = json.load(open(sys.argv[1]))
 print("     ", json.dumps(d["host"]), json.dumps(d["runs"][0]["objectives"]))
 assert d["status"] == "passed" and d["host"]["shipping"], d
-assert d["host"]["layers"] == ["default", "agent"], d  # a scenario leaves out local, in exports too
+assert d["host"]["layers"] == ["default"], d  # local and agent are dev_only: never in an export
 assert abs(d["runs"][0]["objectives"][0]["value"] - 96) <= 2, d  # tuning.dta's, not the scene's 80
 PY
 check $? "  a shipping build, tuning.dta's values read from the package, without local or agent.dta"
+pck="${game%.*}.pck"  # the export plugin leaves dev_only layers' files out of the package
+[ -f "$pck" ] && ! grep -q "height 300" "$pck"; check $? "  and the package holds no agent.dta"
 echo "$failures failure(s)"
 exit $((failures > 0))

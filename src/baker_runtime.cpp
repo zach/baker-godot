@@ -2,10 +2,10 @@
 
 #include "baker_binding.hpp"
 #include "godot_files.hpp"
-#include "tools.hpp"
 #include "values.hpp"
 
 #include <baker/error.hpp>
+#include <baker/host/commands.hpp>
 #include <baker/project.hpp>
 #include <baker/std_interop.hpp>
 #include <baker/std_script.hpp>
@@ -23,6 +23,7 @@
 #include <cstdio>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace baker_godot {
 
@@ -117,6 +118,8 @@ void BakerRuntime::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_console_port"), &BakerRuntime::get_console_port);
     ClassDB::bind_static_method("BakerRuntime", D_METHOD("is_shipping"),
                                 &BakerRuntime::is_shipping);
+    ClassDB::bind_static_method("BakerRuntime", D_METHOD("dev_only_files", "project_path"),
+                                &BakerRuntime::dev_only_files);
     ClassDB::bind_method(D_METHOD("loop_stats"), &BakerRuntime::loop_stats);
     ClassDB::bind_method(D_METHOD("get_last_error"), &BakerRuntime::get_last_error);
     ClassDB::bind_method(D_METHOD("set_project_path", "path"), &BakerRuntime::set_project_path);
@@ -214,7 +217,6 @@ godot::Error BakerRuntime::open(const String& project_path) {
         context_.reset();
         return fail(r.error());
     }
-    files_epoch_ = live_->config().stack_files_epoch();  // as Live watched them
     return godot::OK;
 }
 
@@ -223,13 +225,6 @@ void BakerRuntime::_process(double) {
         if (!tool_args_.empty() && ++tool_frames_ == 2) run_tool_command();
         if (!live_) return;
         live_->begin_frame();  // reloads what was saved; answers the console
-        // The stack's files changed (one appeared, an #include was added): Live watched them
-        // anew, which takes an edit made since the last poll for seen (requirement 0008).
-        // One reload catches it.
-        if (const uint64_t files = config()->stack_files_epoch(); files != files_epoch_) {
-            files_epoch_ = files;
-            (void)reload();
-        }
         if (capturing_ && session_dirty_) {
             session_dirty_ = false;
             godot::EngineDebugger::get_singleton()->send_message("baker:session",
@@ -293,25 +288,62 @@ String BakerRuntime::eval_request(const String& line) {
     }
 }
 
+godot::PackedStringArray BakerRuntime::dev_only_files(const String& project_path) {
+    godot::PackedStringArray out;
+    auto project = baker::read_project(project_file(project_path), reader());
+    if (!project) {
+        godot::UtilityFunctions::push_error("Baker: ", to_godot(baker::to_string(project.error())));
+        return out;
+    }
+    for (const baker::ProjectLayer& l : project->layers)
+        if (l.dev_only) out.push_back(to_godot(godot_path(l.path.str())));
+    return out;
+}
+
 int BakerRuntime::get_console_port() const {
     return live_ ? int(live_->console_port()) : 0;
 }
 
-// --baker COMMAND: runs once the scene is ready, its bound properties' tweaks registered,
-// then quits with the command's status.
+// --baker COMMAND: Baker's tool commands (host/commands.hpp), run once the scene is ready
+// and its bound properties' tweaks are registered, then quits with the command's status.
 void BakerRuntime::run_tool_command() {
-    ToolResult r;
-    if (!live_)
-        r = {2, {}, "baker: " + to_std(last_error_) + "\n"};
-    else
-        r = run_tool(tool_args_, live_->config(), *context_);
-    std::fwrite(r.out.data(), 1, r.out.size(), stdout);
+    int status = baker::host::kCommandError;
+    std::string out;
+    std::vector<const char*> argv{"baker"};
+    for (const std::string& a : tool_args_) argv.push_back(a.c_str());
+    auto line = baker::host::parse_command_line(int(argv.size()), argv.data());
+    if (!line) {
+        const std::string message(baker::to_string(line.error()));
+        std::fprintf(stderr, "baker: %s\n", message.c_str());
+    } else if (line->write) {
+        std::fputs(
+            "baker: a game never writes into the project: promote --patch FILE gives "
+            "the change for a person to apply\n",
+            stderr);
+    } else {
+        const std::string project = project_file(project_path_);
+        line->project = project;
+        baker::host::CommandHooks hooks;
+        hooks.reader = reader();
+        hooks.output = [&out](std::string_view text) { out.append(text); };
+        if (skip_local_) (void)hooks.open.skip.add("local");
+        // The commands open a Config of their own, which binds the tweak registry, the bound
+        // properties' among them: close this one first.
+        live_.reset();
+        context_.reset();
+        status = baker::host::run_command(*line, hooks);
+        if (status < 0) {
+            std::fprintf(stderr, "baker: no command '%s'\n%s", argv[1],
+                         std::string(baker::host::command_help()).c_str());
+            status = baker::host::kCommandError;
+        }
+    }
+    std::fwrite(out.data(), 1, out.size(), stdout);
     std::fflush(stdout);
-    std::fwrite(r.err.data(), 1, r.err.size(), stderr);
     std::fflush(stderr);
-    if (!tool_out_.empty() && !write_output(tool_out_, r.out)) r.status = 2;
+    if (!tool_out_.empty() && !write_output(tool_out_, out)) status = baker::host::kCommandError;
     tool_args_.clear();
-    get_tree()->quit(r.status);
+    get_tree()->quit(status);
 }
 
 // The editor's messages: the prefix "baker:" is taken off before they reach here.

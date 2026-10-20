@@ -1,5 +1,9 @@
 # 0009: Layers the project file marks for development only
 
+**Shipped** in Baker 0.2.1 (`dev_only` on a project layer, `ProjectLayer::dev_only`,
+`ProjectOptions::skip_dev_only`); `local` and `agent` are marked, and the export plugin
+leaves their files out instead of a list in each preset.
+
 ## The need
 
 A project file can mark a layer as one for development only: a person's own tuning, an

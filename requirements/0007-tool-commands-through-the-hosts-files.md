@@ -1,8 +1,7 @@
 # 0007: The kit's tool commands read and write through the host
 
-**Merged** into baker-dev main (D195: `CommandHooks::reader` and `output`, and the kit's
-`--output FILE`), in no release yet. This integration keeps its own commands until a
-release carries it.
+**Shipped** in Baker 0.2.1 (`CommandHooks::reader` and `output`, and `--output FILE`); this
+integration runs the kit's commands and has dropped its own.
 
 ## The need
 
