@@ -43,7 +43,9 @@ add_library(baker_godot SHARED
   src/godot_files.cpp
   src/values.cpp
   src/baker_runtime.cpp
-  src/baker_binding.cpp)
+  src/baker_binding.cpp
+  src/console.cpp
+  src/tools.cpp)
 target_link_libraries(baker_godot PRIVATE godot-cpp baker::baker)
 if(MSVC)
   target_compile_options(baker_godot PRIVATE /W4 /permissive- /utf-8 /EHs-c-)

@@ -1,7 +1,7 @@
 ## The sample level: a floor, some platforms, the player, and a line of help.
 ##
 ## F1 toggles the `floaty` experiment layer while playing. Run with
-## `-- --scenario=<name>` to play a scenario from res://scenarios/ instead of the keyboard.
+## `-- --scenario NAME` to play a scenario from res://scenarios/ instead of the keyboard.
 extends Node2D
 
 const PLATFORMS := [
@@ -21,10 +21,20 @@ func _ready() -> void:
 		_add_platform(rect)
 	Baker.changed.connect(_show_layers)
 	_show_layers()
-	for arg in OS.get_cmdline_user_args():
-		if arg.begins_with("--scenario="):
-			var scenario: Node = load("res://scenarios/%s.gd" % arg.get_slice("=", 1)).new()
-			add_child(scenario)
+	var scenario := _scenario_name()
+	if scenario != "":
+		add_child(load("res://scenarios/%s.gd" % scenario).new())
+
+
+## --scenario NAME or --scenario=NAME, after `--`.
+func _scenario_name() -> String:
+	var args := OS.get_cmdline_user_args()
+	for i in args.size():
+		if args[i].begins_with("--scenario="):
+			return args[i].get_slice("=", 1)
+		if args[i] == "--scenario" and i + 1 < args.size():
+			return args[i + 1]
+	return ""
 
 
 func _unhandled_input(event: InputEvent) -> void:

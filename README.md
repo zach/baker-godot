@@ -4,8 +4,8 @@ An integration of [Baker](https://github.com/zach/baker) with [Godot](https://go
 tuning data in layers (`default`, `local`, `agent`, experiments), each value knowing where
 it came from, and values tuned while playing written back to their line in the data.
 
-Status: steps 1 and 2 of 4, the runtime and the editor loop. The agent tools and exports
-come next (see "Plan" below).
+Status: steps 1 to 3 of 4: the runtime, the editor loop, and agents and exports (see
+"Plan" below).
 
 ## The demonstration
 
@@ -63,15 +63,62 @@ the remote inspector sends, and checks the diff.
 
   The `changed` signal fires after every change of the data.
 
+## Agents
+
+An agent works on the game's data through the same surface a person's tools use, in
+debug builds, with nothing to parse that Baker did not write as JSON. It is the surface the
+MCP bridge of baker-mcp is planned against; the bridge itself is not built yet.
+
+- **The game as its own tool.** Run headless with the scene loaded, so the bound
+  properties are tweaks:
+
+  ```sh
+  godot --headless --path sample -- --baker check --json         # baker.check/1
+  godot --headless --path sample -- --baker reference --json     # vocabulary, tweaks, shapes
+  godot --headless --path sample -- --baker eval --json "{config.explain player.jump.height}"
+  godot --headless --path sample -- --baker diff                 # what agent.dta changes
+  godot --headless --path sample -- --baker promote --patch agent.patch
+  ```
+
+  `--out FILE` writes the result to a file too. `promote` writes nothing but the patch: a
+  person applies it (`git apply -p1`) or keeps the values from the editor.
+- **Scenarios** drive the player and judge the run by written objectives:
+  `-- --scenario reach` (does a jump clear the first platform?) and `-- --scenario jump`.
+  Each prints one line of JSON (`baker-godot.scenario/1`) and exits 1 if an objective
+  failed.
+- **The agent layer.** An agent proposes in `data/agent.dta`, which version control
+  ignores; `check`, `diff` and the scenarios then judge the proposal.
+- **The running game's console**, on 127.0.0.1 only: `-- --console-port 7000`. A line
+  `(1 {config.toggle agent})` is answered with one line of `baker.reply/1.1` JSON. Baker's
+  Config tools are bound (`config.explain`, `config.set`, `config.toggle`,
+  `config.journal`, ...); the ones that write files only with `--console-write`.
+  `tests/console.py` is a client.
+
+Tool commands and scenarios leave out the `local` layer, so their results do not depend on
+whose machine runs them. `tests/agent.sh` runs an agent's loop end to end: `reach` fails,
+a proposal in `agent.dta` passes `check` and makes `reach` pass, A/B over the console, and
+a promote patch that applies as a one-line diff.
+
+## Exports
+
+A release export is a Baker shipping build: the data is packed (`export_presets.cfg`
+includes `*.dta`) and read as text, without caches, which are tied to Baker's version and
+pointer size. It does not reload, take live edits, write, or open a console.
+`tests/export.sh` exports the sample and runs a scenario in the exported game.
+`tools/fetch_template.py` installs one platform's export template without downloading the
+whole bundle.
+
 ## The sample
 
 `sample/` is a small platformer with ten tunables in `data/tuning.dta`, an experiment layer
 `floaty` (F1 while playing), and a headless scenario:
 
 ```sh
-godot --headless --path sample -- --scenario=jump       # checks the jump's apex
+godot --headless --path sample -- --scenario jump       # checks the jump's apex
 godot --headless --path sample res://tests/runtime_test.tscn
 tests/e2e.sh path/to/godot                              # the demonstration, headless
+tests/agent.sh path/to/godot                            # an agent's loop
+tests/export.sh path/to/godot                           # a release export, run
 ```
 
 With `BAKER_SHOTS=<dir>`, the end-to-end test also saves screenshots of the editor at each
@@ -97,8 +144,8 @@ against a local Baker checkout, add `-DFETCHCONTENT_SOURCE_DIR_BAKER=/path/to/ba
 2. **Editor loop** (done): a dock (layers, tweaks, the running game's journal with Keep and
    Discard), an inspector plugin showing a property's layer chain, the journal sent over
    the debugger channel, and write-back from the editor process.
-3. **Agents and shipping**: Baker's console and config tools in debug builds, a headless
-   runner, and exports that load text.
+3. **Agents and shipping** (done): the console and Baker's Config tools in debug builds,
+   the game's tool commands and scenarios headless, and exports that load text.
 4. **Requirements back to Baker**, as notes in `requirements/`.
 
 ## Requirements for Baker

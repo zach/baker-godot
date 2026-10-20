@@ -16,11 +16,20 @@
 // and takes baker:toggle [layer, enabled], baker:kept [path] and baker:discard [path]. In
 // the editor, a BakerRuntime opened by the plugin may write into the project
 // (project_writes), so that "Keep" writes a value back from the editor process.
+//
+// For tools and agents, in debug builds (the user arguments after `--`):
+//   --console-port N    a loopback console (console.hpp) with Baker's Config tools bound:
+//                       {config.explain p}, {config.set p v}, {config.toggle layer}, ...
+//   --console-write     also config.write_back and config.promote
+//   --baker COMMAND...  run a tool command once the scene is ready, then quit (tools.hpp)
+//   --no-local          leave out the `local` layer; tool commands and scenarios always do,
+//                       in shipping builds too
 
 #include "godot_files.hpp"
 
 #include <baker/config.hpp>
 #include <baker/project.hpp>
+#include <baker/script.hpp>
 
 #include <godot_cpp/classes/node.hpp>
 #include <godot_cpp/variant/array.hpp>
@@ -95,6 +104,16 @@ public:
     // the value came from before it was tuned: where Keep writes it.
     [[nodiscard]] godot::Dictionary session() const;
 
+    // --- Tools and agents. ---
+    // Answers one console line: a request (ID {command}) with one line of baker.reply/1.1
+    // JSON, anything else with text. Debug builds only; the Config tools that write files
+    // are bound only with --console-write.
+    godot::String eval_request(const godot::String& line);
+    // The console's port, or 0 if none listens.
+    [[nodiscard]] int get_console_port() const;
+    // A shipping build (an export): no reloads, live edits, write-back, console or tools.
+    [[nodiscard]] static bool is_shipping() { return baker::kShipping; }
+
     // --- Telemetry. ---
     // {reloads, unchanged, failures, files: [...], layers: [...]}, times in milliseconds.
     [[nodiscard]] godot::Dictionary loop_stats() const;
@@ -119,6 +138,12 @@ private:
     void watch_files();
     void poll();
     godot::Error wrote(const baker::WriteReport& report);
+    void read_arguments();
+    // The script Context with the Config tools bound, made on first use; null if no
+    // project is open.
+    baker::Context* context();
+    std::string answer(const std::string& line);
+    void run_tool_command();
     bool debugger_message(const godot::String& message, const godot::Array& data);
 
     static BakerRuntime* singleton_;
@@ -131,6 +156,16 @@ private:
     bool capturing_ = false;      // registered with the editor's debugger
     bool session_dirty_ = false;  // the session changed since it was last sent
     godot::Array last_written_;
+
+    // Tools and agents (debug builds). The Context uses the Config: it goes first.
+    std::unique_ptr<baker::Context> context_;
+    std::unique_ptr<class Console> console_;
+    std::vector<std::string> tool_args_;  // --baker COMMAND ...: run once the scene is ready
+    std::string tool_out_;                // --out FILE
+    int tool_frames_ = 0;
+    int console_port_ = -1;  // --console-port N; -1: none
+    bool console_write_ = false;
+    bool skip_local_ = false;
 
     struct Watched {
         std::string path;

@@ -23,8 +23,9 @@ Godot's terms; baker-dev's `INTEGRATIONS.md` is the policy. For work here:
   deliberate update.
 - No Godot engine source. The sample is written here from scratch.
 - Before each commit: `clang-format-18 -i src/*`, build `template_debug` and
-  `template_release`, then run `sample/tests/runtime_test.tscn`, the `jump` scenario, and
-  `tests/e2e.sh` headless (README). A fresh headless import can crash on exit; import twice.
+  `template_release`, then run `sample/tests/runtime_test.tscn`, the `jump` scenario,
+  `tests/e2e.sh`, `tests/agent.sh`, and `tests/export.sh` headless (README). A fresh
+  headless import can crash on exit; import twice.
 - Scope is tunables and rules, never scenes.
 - The owner has asked that each new requirement note's full text be sent to the baker-dev
   session working on Baker (`session_016xH75dZw1uN5knrqdhWRzT`) once it is written, and

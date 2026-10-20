@@ -22,9 +22,13 @@ jobs:
           - os: ubuntu-24.04
             godot: Godot_v4.5.1-stable_linux.x86_64
             zip: Godot_v4.5.1-stable_linux.x86_64.zip
+            template: linux_release.x86_64
+            preset: Linux
           - os: windows-2022
             godot: Godot_v4.5.1-stable_win64_console.exe
             zip: Godot_v4.5.1-stable_win64.exe.zip
+            template: windows_release_x86_64.exe
+            preset: Windows
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -57,3 +61,11 @@ jobs:
       - name: The demonstration, in a headless editor
         timeout-minutes: 5
         run: tests/e2e.sh "$PWD/godot/${{ matrix.godot }}"
+      - name: An agent's loop, through the tool commands and the console
+        timeout-minutes: 5
+        run: tests/agent.sh "$PWD/godot/${{ matrix.godot }}"
+      - name: A release export, run
+        timeout-minutes: 10
+        run: |
+          "$(command -v python3 || command -v python)" tools/fetch_template.py "$GODOT_VERSION" ${{ matrix.template }}
+          tests/export.sh "$PWD/godot/${{ matrix.godot }}" ${{ matrix.preset }}

@@ -1,20 +1,26 @@
 #include "baker_runtime.hpp"
 
 #include "baker_binding.hpp"
+#include "console.hpp"
 #include "godot_files.hpp"
+#include "tools.hpp"
 #include "values.hpp"
 
 #include <baker/error.hpp>
+#include <baker/std_interop.hpp>
+#include <baker/std_script.hpp>
 
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/engine_debugger.hpp>
 #include <godot_cpp/classes/file_access.hpp>
 #include <godot_cpp/classes/os.hpp>
 #include <godot_cpp/classes/rendering_server.hpp>
+#include <godot_cpp/classes/scene_tree.hpp>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/callable_method_pointer.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 
+#include <cstdio>
 #include <string_view>
 
 namespace baker_godot {
@@ -106,6 +112,10 @@ void BakerRuntime::_bind_methods() {
                          &BakerRuntime::set_project_writes);
     ClassDB::bind_method(D_METHOD("get_project_writes"), &BakerRuntime::get_project_writes);
     ClassDB::bind_method(D_METHOD("write_back_to", "path", "layer"), &BakerRuntime::write_back_to);
+    ClassDB::bind_method(D_METHOD("eval_request", "line"), &BakerRuntime::eval_request);
+    ClassDB::bind_method(D_METHOD("get_console_port"), &BakerRuntime::get_console_port);
+    ClassDB::bind_static_method("BakerRuntime", D_METHOD("is_shipping"),
+                                &BakerRuntime::is_shipping);
     ClassDB::bind_method(D_METHOD("loop_stats"), &BakerRuntime::loop_stats);
     ClassDB::bind_method(D_METHOD("get_last_error"), &BakerRuntime::get_last_error);
     ClassDB::bind_method(D_METHOD("set_project_path", "path"), &BakerRuntime::set_project_path);
@@ -130,9 +140,19 @@ void BakerRuntime::_enter_tree() {
         return;
     }
     singleton_ = this;
+    read_arguments();
     if (!config_ && godot::FileAccess::file_exists(project_path_)) (void)open(project_path_);
     if constexpr (!baker::kShipping) {
         set_process(true);
+        if (console_port_ >= 0) {
+            console_ =
+                std::make_unique<Console>([this](const std::string& line) { return answer(line); });
+            if (console_->listen(uint16_t(console_port_)))
+                godot::UtilityFunctions::print("Baker: console on 127.0.0.1:", console_->port());
+            else
+                godot::UtilityFunctions::push_error("Baker: no console: cannot listen on ",
+                                                    console_port_);
+        }
         // Edit-to-see ends when the frame showing the edit is drawn.
         godot::RenderingServer::get_singleton()->connect("frame_post_draw",
                                                          callable_mp(this, &BakerRuntime::present));
@@ -156,6 +176,8 @@ void BakerRuntime::_exit_tree() {
         if (capturing_) godot::EngineDebugger::get_singleton()->unregister_message_capture("baker");
         capturing_ = false;
     }
+    console_.reset();
+    context_.reset();
     config_.reset();
     watched_.clear();
     watched_epoch_ = kNoEpoch;
@@ -170,6 +192,7 @@ godot::Error BakerRuntime::open(const String& project_path) {
     if (!project) return fail(project.error());
 
     // A Config binds the global tweak registry: close the old one before making another.
+    context_.reset();
     config_.reset();
     watched_.clear();
     watched_epoch_ = kNoEpoch;
@@ -181,7 +204,10 @@ godot::Error BakerRuntime::open(const String& project_path) {
     config->set_warning_handler([](const baker::Error& e) {
         godot::UtilityFunctions::push_warning(to_godot(baker::to_string(e)));
     });
-    if (auto r = baker::open_project(*config, *project); !r) return fail(r.error());
+    // The skip list's array lives only as long as the call that is given it.
+    auto r = skip_local_ ? baker::open_project(*config, *project, {.skip = {"local"}})
+                         : baker::open_project(*config, *project);
+    if (!r) return fail(r.error());
     config_ = std::move(config);
     changed();
     return godot::OK;
@@ -189,6 +215,8 @@ godot::Error BakerRuntime::open(const String& project_path) {
 
 void BakerRuntime::_process(double) {
     if constexpr (!baker::kShipping) {
+        if (console_) console_->poll();
+        if (!tool_args_.empty() && ++tool_frames_ == 2) run_tool_command();
         if (!config_) return;
         if (watch_ && godot::OS::get_singleton()->is_debug_build()) poll();
         if (capturing_ && session_dirty_) {
@@ -197,6 +225,94 @@ void BakerRuntime::_process(double) {
                                                                  Array::make(session()));
         }
     }
+}
+
+void BakerRuntime::read_arguments() {
+    const godot::PackedStringArray args = godot::OS::get_singleton()->get_cmdline_user_args();
+    for (int64_t i = 0; i < args.size(); ++i) {
+        const std::string a = to_std(args[i]);
+        const bool more = i + 1 < args.size();
+        if (a == "--no-local" || a.rfind("--scenario", 0) == 0) {
+            skip_local_ = true;  // a run's results do not depend on whose machine it is on
+        } else if constexpr (baker::kShipping) {
+            continue;  // no console or tools in a shipping build
+        } else if (a == "--console-port" && more) {
+            console_port_ = int(args[++i].to_int());
+        } else if (a == "--console-write") {
+            console_write_ = true;
+        } else if (a == "--baker") {
+            skip_local_ = true;
+            for (++i; i < args.size(); ++i) {
+                const std::string t = to_std(args[i]);
+                if (t == "--out" && i + 1 < args.size())
+                    tool_out_ = to_std(args[++i]);
+                else
+                    tool_args_.push_back(t);
+            }
+            if (tool_args_.empty()) tool_args_.push_back("");
+        }
+    }
+}
+
+baker::Context* BakerRuntime::context() {
+    if (!config_) return nullptr;
+    if (!context_) {
+        auto ctx = std::make_unique<baker::Context>();
+        if (auto r = baker::bind_config_tools(*ctx, *config_, {.allow_write = console_write_});
+            !r) {
+            (void)fail(r.error());
+            return nullptr;
+        }
+        context_ = std::move(ctx);
+    }
+    return context_.get();
+}
+
+std::string BakerRuntime::answer(const std::string& line) {
+    baker::Context* ctx = context();
+    if (!ctx) return "error: no project is open";
+    std::string reply;
+    if (const size_t first = line.find_first_not_of(" \t");
+        first != std::string::npos && line[first] == '(') {
+        baker::eval_request(*ctx, line, baker::string_out(reply));
+        if (!reply.empty() && reply.back() == '\n') reply.pop_back();
+    } else {
+        auto r = ctx->eval(line, "<console>");
+        reply = r ? "=> " + baker::to_string(*r) : std::string(baker::describe(r.error()));
+        if (!reply.empty() && reply.back() == '\n') reply.pop_back();
+    }
+    changed();  // a command may have changed the data
+    return reply;
+}
+
+String BakerRuntime::eval_request(const String& line) {
+    if constexpr (baker::kShipping) {
+        return "error: no console in a shipping build";
+    } else {
+        return to_godot(answer(to_std(line)));
+    }
+}
+
+int BakerRuntime::get_console_port() const {
+    return console_ ? int(console_->port()) : 0;
+}
+
+// --baker COMMAND: runs once the scene is ready, its bound properties' tweaks registered,
+// then quits with the command's status.
+void BakerRuntime::run_tool_command() {
+    ToolResult r;
+    baker::Context* ctx = context();
+    if (!ctx)
+        r = {2, {}, "baker: " + to_std(last_error_) + "\n"};
+    else
+        r = run_tool(tool_args_, *config_, *ctx);
+    std::fwrite(r.out.data(), 1, r.out.size(), stdout);
+    std::fflush(stdout);
+    std::fwrite(r.err.data(), 1, r.err.size(), stderr);
+    std::fflush(stderr);
+    if (!tool_out_.empty() && !write_output(tool_out_, r.out)) r.status = 2;
+    tool_args_.clear();
+    get_tree()->quit(r.status);
 }
 
 // The editor's messages: the prefix "baker:" is taken off before they reach here.
