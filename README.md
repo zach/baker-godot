@@ -4,8 +4,8 @@ An integration of [Baker](https://github.com/zach/baker) with [Godot](https://go
 tuning data in layers (`default`, `local`, `agent`, experiments), each value knowing where
 it came from, and values tuned while playing written back to their line in the data.
 
-Status: steps 1 to 3 of 4: the runtime, the editor loop, and agents and exports (see
-"Plan" below).
+Version 0.1.0 (`CHANGELOG.md`), on Baker 0.4.0 and Godot 4.5.1, for Linux and Windows: the
+runtime, the editor loop, agents and exports, all four steps of the plan below.
 
 ## The demonstration
 
@@ -174,7 +174,8 @@ against a local Baker checkout, add `-DFETCHCONTENT_SOURCE_DIR_BAKER=/path/to/ba
    the game's tool commands, `sim` and `compare` headless, the agent skill, and exports that
    load text. (An MCP bridge, plan A, was built and evaluated in baker-mcp; the command
    line and skill needed fewer calls for the same success, so this repository drops it.)
-4. **Requirements back to Baker**, as notes in `requirements/`.
+4. **Requirements back to Baker** (done), as notes in `requirements/`: 0001 to 0011 shipped
+   in Baker and are in use here; 0012 to 0016 are with Baker.
 
 ## Requirements for Baker
 
