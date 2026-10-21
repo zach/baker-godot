@@ -8,6 +8,7 @@ extends Node
 const LOCAL := "user://baker/local.dta"
 
 var failures := 0
+var completed := false  # run() reached its end: a script error stops it short
 
 
 func check(ok: bool, what: String) -> void:
@@ -20,6 +21,7 @@ func _ready() -> void:
 	DirAccess.remove_absolute(LOCAL)
 	Baker.reload()
 	await run()
+	check(completed, "the tests ran to their end, with no script error")
 	DirAccess.remove_absolute(LOCAL)
 	print("%d failure(s)" % failures)
 	get_tree().quit(failures)
@@ -138,11 +140,52 @@ func run() -> void:
 	check(player.run_speed == 220.0, "discarded, the property returns to the data's value")
 	check(binding.capture() == 0, "which is not taken for an edit")
 
+	# Bindings at scale: forty scouts and twenty tanks, one binding each through the path
+	# units.{kind}.max_hp, make two tweaks, and an edit of a kind reaches every unit of it.
+	var tweaks_before := BakerBinding.shared_tweak_count()
+	var units: Array[Node] = []
+	for i in 60:
+		var u: Node = preload("res://tests/unit_probe.gd").new()
+		u.kind = &"scout" if i < 40 else &"tank"
+		u.max_hp = 10.0 + i  # each its own, while the data has no units
+		add_child(u)
+		units.append(u)
+	var scouts := units.slice(0, 40)
+	var tanks := units.slice(40)
+	check(BakerBinding.shared_tweak_count() == tweaks_before + 2,
+		"sixty units of two kinds bind two tweaks: %d" % [BakerBinding.shared_tweak_count() - tweaks_before])
+	check(units.all(func(u): return u.max_hp == 10.0 + units.find(u)),
+		"the data has no units: each keeps its own value")
+	check(Baker.set_value("units.scout.max_hp", 50.0) == OK
+		and scouts.all(func(u): return u.max_hp == 50.0 and u.hp == 50.0)
+		and tanks.all(func(u): return u.max_hp == 10.0 + units.find(u)),
+		"an edit of units.scout.max_hp reaches every scout, and no tank")
+	check(scouts.all(func(u): return u.changes == 1),
+		"property_changed tells each scout once, which re-derives its hit points")
+	scouts[3].max_hp = 55.0
+	check(scouts[3].get_node("BakerBinding").capture() == 1
+		and scouts.all(func(u): return u.max_hp == 55.0),
+		"one scout changed from outside is an edit of the kind: every scout follows")
+	Baker.clear_scratch("units/scout/max_hp")
+	check(units.all(func(u): return u.max_hp == 10.0 + units.find(u)),
+		"the data without the path again: each unit has its own value back")
+	var stray: Node = preload("res://tests/unit_probe.gd").new()
+	stray.kind = &""
+	add_child(stray)
+	check(stray.get_node("BakerBinding").sources().is_empty(),
+		"a path whose key the node lacks is not bound")
+	stray.free()
+	for u in units:
+		u.free()
+	check(BakerBinding.shared_tweak_count() == tweaks_before,
+		"the units gone, their tweaks go: %d left" % [BakerBinding.shared_tweak_count()])
+
 	# A bound node gone: its tweaks go with it.
 	player.queue_free()
 	await get_tree().process_frame
 	check(Baker.set_value("player.jump.height", 130.0) == OK, "edits after the node is freed")
 	Baker.clear_scratch()
+	completed = true
 
 
 ## Waits a frame at a time, up to a second, until `condition` holds.

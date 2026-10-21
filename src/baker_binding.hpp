@@ -5,11 +5,16 @@
 //   Player (CharacterBody2D, player.gd: @export var jump_height := 96.0)
 //   └─ BakerBinding   bindings = {"jump_height": "player.jump.height"}
 //
-// Each binding is a tweak of the property's own type, made at runtime, whose default is
-// the value the scene gives the property. The property is assigned when it binds and
-// whenever the data changes (a reload, a layer toggled, a live edit), so GDScript reads it
-// as a plain property: no call into Baker per frame. A path the data lacks leaves the
-// scene's value standing.
+// Each path is one tweak of the property's own type, made at runtime and shared by every
+// bound property that names the path: a hundred units of one kind bind one tweak. Its
+// default is the first binder's value from its scene. The property is assigned when it binds
+// and whenever the data changes (a reload, a layer toggled, a live edit), so GDScript reads
+// it as a plain property: no call into Baker per frame; property_changed(property) follows
+// each assignment, for state the node derives from it. A path the data lacks leaves each
+// node's own scene value standing.
+//
+// A path may take a key from the node: "units.{kind}.hp" reads the node's `kind` when it
+// binds, so one binding in a base scene serves every scene that inherits it.
 //
 // Types: bool, int, float, String, StringName, Vector2, Vector3, Color.
 //
@@ -19,7 +24,8 @@
 // own (range ...) or (one_of ...) after a value wins, as for any tweak.
 //
 // Under the editor's debugger, a value set on a bound property from outside (the remote
-// inspector) becomes a live edit of its path: in scratch, unsaved, in the journal. It is
+// inspector) becomes a live edit of its path, and so of every node that binds the path: in
+// scratch, unsaved, in the journal. It is
 // noticed by comparing each bound property with what it was last given, ten times a second,
 // and only while a debugger is attached; a game run on its own never compares. Bound
 // properties are tunables: code that changes one at runtime is taken for a tuner.
@@ -58,7 +64,9 @@ public:
     [[nodiscard]] static godot::Array all_bindings();
 
     // One bound property; defined in the .cpp.
-    struct Bound;
+    struct Use;
+    // How many paths are bound, each one tweak however many nodes bind it.
+    [[nodiscard]] static int64_t shared_tweak_count();
 
 protected:
     static void _bind_methods();
@@ -69,7 +77,7 @@ private:
     static constexpr double kCaptureInterval = 0.1;  // seconds
 
     godot::Dictionary bindings_;  // property -> path
-    std::vector<std::unique_ptr<Bound>> bound_;
+    std::vector<std::unique_ptr<Use>> uses_;
     double since_capture_ = 0;
     static std::vector<BakerBinding*> live_;  // the bindings with bound properties
 };

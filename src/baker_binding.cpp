@@ -12,6 +12,9 @@
 #include <godot_cpp/variant/utility_functions.hpp>
 
 #include <memory>
+#include <string>
+#include <string_view>
+#include <unordered_map>
 #include <vector>
 
 namespace baker_godot {
@@ -21,77 +24,84 @@ using godot::Dictionary;
 using godot::String;
 using godot::Variant;
 
-// A tweak of some type, and the property it assigns.
-struct BakerBinding::Bound {
-    virtual ~Bound() = default;
-    [[nodiscard]] virtual const baker::TweakBase& tweak() const = 0;
-    [[nodiscard]] virtual Variant value() const = 0;
-
+// One bound property of one node: where a path's value goes.
+struct BakerBinding::Use {
+    BakerBinding* binding = nullptr;
     godot::Node* target = nullptr;
     godot::StringName property;
-    godot::Variant last;  // what the property was last given, or seen to hold
-    // What the tweak's metadata points at: an enum hint's allowed values, by interned names.
-    struct Allowed {
-        std::vector<std::string_view> one_of;
-        std::vector<baker::TweakChoice> choices;
-    };
-    std::unique_ptr<Allowed> allowed;
+    godot::Variant last;   // what the property was last given, or seen to hold
+    godot::Variant scene;  // its own value from the scene, while the data lacks the path
+    struct Shared* shared = nullptr;
 
-    void assign() {
-        last = value();
-        target->set(property, last);
+    void assign(const Variant& value) {
+        last = value;
+        target->set(property, value);
+        binding->emit_signal("property_changed", property);
     }
 };
 
 namespace {
 
+// A tweak of some type.
+struct Tweaked {
+    virtual ~Tweaked() = default;
+    [[nodiscard]] virtual baker::TweakBase& tweak() = 0;
+    [[nodiscard]] virtual Variant value() const = 0;
+};
+
 template <class T>
-struct BoundAs final : BakerBinding::Bound {
-    BoundAs(baker::Symbol path, T fallback, const baker::TweakMeta& meta)
+struct TweakAs final : Tweaked {
+    TweakAs(baker::Symbol path, T fallback, const baker::TweakMeta& meta)
         : t(path, std::move(fallback), meta) {}
-    [[nodiscard]] const baker::TweakBase& tweak() const override { return t; }
+    [[nodiscard]] baker::TweakBase& tweak() override { return t; }
     [[nodiscard]] Variant value() const override { return Variant(t.value()); }
     baker::Tweak<T> t;
 };
 
 // A StringName reads as a symbol: the tweak holds a Symbol, the property a StringName.
 template <>
-struct BoundAs<baker::Symbol> final : BakerBinding::Bound {
-    BoundAs(baker::Symbol path, baker::Symbol fallback, const baker::TweakMeta& meta)
+struct TweakAs<baker::Symbol> final : Tweaked {
+    TweakAs(baker::Symbol path, baker::Symbol fallback, const baker::TweakMeta& meta)
         : t(path, fallback, meta) {}
-    [[nodiscard]] const baker::TweakBase& tweak() const override { return t; }
+    [[nodiscard]] baker::TweakBase& tweak() override { return t; }
     [[nodiscard]] Variant value() const override {
         return godot::StringName(to_godot(t.value().str()));
     }
     baker::Tweak<baker::Symbol> t;
 };
 
-// A tweak whose default is the property's value from the scene.
-std::unique_ptr<BakerBinding::Bound> make_bound(baker::Symbol path, const Variant& v,
-                                                const baker::TweakMeta& m) {
+// A tweak whose default is the first binder's value from its scene.
+std::unique_ptr<Tweaked> make_tweak(baker::Symbol path, const Variant& v,
+                                    const baker::TweakMeta& m) {
     switch (v.get_type()) {
-        case Variant::BOOL: return std::make_unique<BoundAs<bool>>(path, bool(v), m);
-        case Variant::INT: return std::make_unique<BoundAs<int64_t>>(path, int64_t(v), m);
-        case Variant::FLOAT: return std::make_unique<BoundAs<double>>(path, double(v), m);
+        case Variant::BOOL: return std::make_unique<TweakAs<bool>>(path, bool(v), m);
+        case Variant::INT: return std::make_unique<TweakAs<int64_t>>(path, int64_t(v), m);
+        case Variant::FLOAT: return std::make_unique<TweakAs<double>>(path, double(v), m);
         case Variant::STRING:
-            return std::make_unique<BoundAs<godot::String>>(path, godot::String(v), m);
+            return std::make_unique<TweakAs<godot::String>>(path, godot::String(v), m);
         case Variant::STRING_NAME:
-            return std::make_unique<BoundAs<baker::Symbol>>(path, baker::Symbol(to_std(String(v))),
+            return std::make_unique<TweakAs<baker::Symbol>>(path, baker::Symbol(to_std(String(v))),
                                                             m);
         case Variant::VECTOR2:
-            return std::make_unique<BoundAs<godot::Vector2>>(path, godot::Vector2(v), m);
+            return std::make_unique<TweakAs<godot::Vector2>>(path, godot::Vector2(v), m);
         case Variant::VECTOR3:
-            return std::make_unique<BoundAs<godot::Vector3>>(path, godot::Vector3(v), m);
+            return std::make_unique<TweakAs<godot::Vector3>>(path, godot::Vector3(v), m);
         case Variant::COLOR:
-            return std::make_unique<BoundAs<godot::Color>>(path, godot::Color(v), m);
+            return std::make_unique<TweakAs<godot::Color>>(path, godot::Color(v), m);
         default: return nullptr;
     }
 }
 
+// What the tweak's metadata points at: an enum hint's allowed values, by interned names.
+struct Allowed {
+    std::vector<std::string_view> one_of;
+    std::vector<baker::TweakChoice> choices;
+};
+
 // What the property's export hint says, as the tweak's metadata, for tools, agents and
 // check: @export_range(min, max, step) its range and step; @export_enum its allowed values,
 // a String's as one_of, an int's as named choices ("Easy,Hard:5": 0 easy, 5 hard).
-baker::TweakMeta meta_of(const Dictionary& property, BakerBinding::Bound::Allowed& allowed) {
+baker::TweakMeta meta_of(const Dictionary& property, Allowed& allowed) {
     baker::TweakMeta meta;
     const int64_t hint = property.get("hint", 0);
     const godot::PackedStringArray parts = String(property.get("hint_string", "")).split(",");
@@ -120,6 +130,54 @@ baker::TweakMeta meta_of(const Dictionary& property, BakerBinding::Bound::Allowe
     return meta;
 }
 
+// "units.{kind}.hp" with the node's `kind` in place of {kind}; empty, and `error` set, if
+// the node has no such property or it is empty.
+String resolve(const String& path, const godot::Node& target, String& error) {
+    String out;
+    int64_t at = 0;
+    while (at < path.length()) {
+        const int64_t open = path.find("{", at);
+        if (open < 0) {
+            out += path.substr(at);
+            break;
+        }
+        const int64_t close = path.find("}", open);
+        if (close < 0) {
+            error = "an unclosed { in " + path;
+            return {};
+        }
+        out += path.substr(at, open - at);
+        const godot::StringName key = path.substr(open + 1, close - open - 1);
+        const Variant v = target.get(key);
+        const String text = v.get_type() == Variant::NIL ? String() : String(v);
+        if (text.is_empty()) {
+            error = String(target.get_name()) + " has no " + String(key) + " for " + path;
+            return {};
+        }
+        out += text;
+        at = close + 1;
+    }
+    return out;
+}
+
+}  // namespace
+
+// One path's tweak, shared by every bound property that binds the path: the first binder's
+// type, default and metadata; destroyed when the last one unbinds.
+struct Shared {
+    std::unique_ptr<Allowed> allowed;  // first: the tweak's metadata points into it
+    std::unique_ptr<Tweaked> tweaked;
+    Variant::Type type = Variant::NIL;
+    std::vector<BakerBinding::Use*> uses;
+};
+
+namespace {
+
+std::unordered_map<std::string, std::unique_ptr<Shared>>& shared_tweaks() {
+    static std::unordered_map<std::string, std::unique_ptr<Shared>> tweaks;
+    return tweaks;
+}
+
 }  // namespace
 
 std::vector<BakerBinding*> BakerBinding::live_;
@@ -137,9 +195,14 @@ void BakerBinding::_bind_methods() {
     ClassDB::bind_method(D_METHOD("sources"), &BakerBinding::sources);
     ClassDB::bind_method(D_METHOD("rebind"), &BakerBinding::rebind);
     ClassDB::bind_method(D_METHOD("capture"), &BakerBinding::capture);
+    ClassDB::bind_static_method("BakerBinding", D_METHOD("shared_tweak_count"),
+                                &BakerBinding::shared_tweak_count);
     ADD_PROPERTY(godot::PropertyInfo(Variant::DICTIONARY, "bindings",
                                      godot::PROPERTY_HINT_TYPE_STRING, "String:String"),
                  "set_bindings", "get_bindings");
+    // After the data assigns a bound property: a reload, a toggle, a live edit.
+    ADD_SIGNAL(godot::MethodInfo("property_changed",
+                                 godot::PropertyInfo(Variant::STRING_NAME, "property")));
 }
 
 void BakerBinding::set_bindings(const Dictionary& bindings) {
@@ -165,15 +228,17 @@ void BakerBinding::_process(double delta) {
     }
 }
 
+// A live edit of the path, so of every instance that binds it.
 int64_t BakerBinding::capture() {
     BakerRuntime* runtime = BakerRuntime::get_singleton();
     if (!runtime || !runtime->is_open()) return 0;
     int64_t edits = 0;
-    for (const std::unique_ptr<Bound>& b : bound_) {
-        const Variant now = b->target->get(b->property);
-        if (now == b->last) continue;
-        b->last = now;
-        if (runtime->set_value(to_godot(b->tweak().path()), now) == godot::OK) ++edits;
+    for (const std::unique_ptr<Use>& u : uses_) {
+        const Variant now = u->target->get(u->property);
+        if (now == u->last) continue;
+        u->last = now;
+        if (runtime->set_value(to_godot(u->shared->tweaked->tweak().path()), now) == godot::OK)
+            ++edits;
     }
     return edits;
 }
@@ -181,16 +246,20 @@ int64_t BakerBinding::capture() {
 Array BakerBinding::all_bindings() {
     Array out;
     for (const BakerBinding* binding : live_) {
-        for (const std::unique_ptr<Bound>& b : binding->bound_) {
+        for (const std::unique_ptr<Use>& u : binding->uses_) {
             Dictionary d;
-            d["object_id"] = int64_t(b->target->get_instance_id());
-            d["node"] = String(b->target->get_path());
-            d["property"] = b->property;
-            d["path"] = to_godot(b->tweak().path());
+            d["object_id"] = int64_t(u->target->get_instance_id());
+            d["node"] = String(u->target->get_path());
+            d["property"] = u->property;
+            d["path"] = to_godot(u->shared->tweaked->tweak().path());
             out.push_back(d);
         }
     }
     return out;
+}
+
+int64_t BakerBinding::shared_tweak_count() {
+    return int64_t(shared_tweaks().size());
 }
 
 void BakerBinding::_exit_tree() {
@@ -198,7 +267,12 @@ void BakerBinding::_exit_tree() {
 }
 
 void BakerBinding::unbind() {
-    bound_.clear();
+    for (const std::unique_ptr<Use>& u : uses_) {
+        Shared* s = u->shared;
+        std::erase(s->uses, u.get());
+        if (s->uses.empty()) shared_tweaks().erase(std::string(s->tweaked->tweak().path()));
+    }
+    uses_.clear();
     std::erase(live_, this);
 }
 
@@ -206,56 +280,87 @@ void BakerBinding::rebind() {
     unbind();
     godot::Node* target = get_parent();
     if (!target) return;
-    const godot::Array properties = bindings_.keys();
+    Dictionary infos;  // property -> its info, from one walk of the list
+    for (const Variant& p : target->get_property_list()) {
+        const Dictionary info = p;
+        infos[godot::StringName(info["name"])] = info;
+    }
+    const Array properties = bindings_.keys();
     for (int64_t i = 0; i < properties.size(); ++i) {
         const godot::StringName property = properties[i];
-        const String path = bindings_[properties[i]];
-        Dictionary info;
-        const Variant current = target->get(property);
-        for (const Variant& p : target->get_property_list())
-            if (godot::StringName(Dictionary(p)["name"]) == property) info = p;
-        if (info.is_empty()) {
+        if (!infos.has(property)) {
             godot::UtilityFunctions::push_warning("BakerBinding: ", target->get_name(),
                                                   " has no property ", property);
             continue;
         }
-        auto allowed = std::make_unique<Bound::Allowed>();
-        std::unique_ptr<Bound> b =
-            make_bound(baker::Symbol(to_std(path)), current, meta_of(info, *allowed));
-        if (!b) {
-            godot::UtilityFunctions::push_warning("BakerBinding: ", property, " is a ",
-                                                  Variant::get_type_name(current.get_type()),
-                                                  ", which data cannot hold");
+        String error;
+        const String path = resolve(String(bindings_[properties[i]]), *target, error);
+        if (path.is_empty()) {
+            godot::UtilityFunctions::push_warning("BakerBinding: ", error);
             continue;
         }
-        b->target = target;
-        b->property = property;
-        b->allowed = std::move(allowed);  // on the heap: the metadata's spans stay valid
-        Bound* raw = b.get();
-        // The tweak outlives no binding: it is destroyed with `b`, and with it this callback.
-        const_cast<baker::TweakBase&>(raw->tweak()).on_change([raw] { raw->assign(); });
-        if (raw->tweak().bound())
-            raw->assign();
+        const Variant current = target->get(property);
+        const std::string key = to_std(path);
+        std::unique_ptr<Shared>& slot = shared_tweaks()[key];
+        if (!slot) {
+            auto s = std::make_unique<Shared>();
+            s->allowed = std::make_unique<Allowed>();
+            s->tweaked =
+                make_tweak(baker::Symbol(key), current, meta_of(infos[property], *s->allowed));
+            if (!s->tweaked) {
+                shared_tweaks().erase(key);
+                godot::UtilityFunctions::push_warning("BakerBinding: ", property, " is a ",
+                                                      Variant::get_type_name(current.get_type()),
+                                                      ", which data cannot hold");
+                continue;
+            }
+            s->type = current.get_type();
+            Shared* raw = s.get();
+            // The tweak goes when its Shared does, and with it this callback.
+            // The data's value, or each node's own when the data no longer has the path.
+            raw->tweaked->tweak().on_change([raw] {
+                const bool bound = raw->tweaked->tweak().bound();
+                const Variant v = raw->tweaked->value();
+                for (BakerBinding::Use* u : raw->uses) u->assign(bound ? v : u->scene);
+            });
+            slot = std::move(s);
+        } else if (slot->type != current.get_type()) {
+            godot::UtilityFunctions::push_warning(
+                "BakerBinding: ", target->get_name(), ".", property, " is a ",
+                Variant::get_type_name(current.get_type()), ", but ", path, " is bound as a ",
+                Variant::get_type_name(slot->type));
+            continue;
+        }
+        auto u = std::make_unique<Use>();
+        u->binding = this;
+        u->target = target;
+        u->property = property;
+        u->shared = slot.get();
+        u->scene = current;
+        slot->uses.push_back(u.get());
+        // The data's value if it has one; the scene's own until then.
+        if (slot->tweaked->tweak().bound())
+            u->assign(slot->tweaked->value());
         else
-            raw->last = current;
-        bound_.push_back(std::move(b));
+            u->last = current;
+        uses_.push_back(std::move(u));
     }
-    if (!bound_.empty()) live_.push_back(this);
+    if (!uses_.empty()) live_.push_back(this);
 }
 
 Dictionary BakerBinding::sources() const {
     Dictionary out;
-    for (const std::unique_ptr<Bound>& b : bound_) {
+    for (const std::unique_ptr<Use>& u : uses_) {
         Dictionary d;
-        const baker::TweakBase& t = b->tweak();
+        const baker::TweakBase& t = u->shared->tweaked->tweak();
         d["path"] = to_godot(t.path());
         d["bound"] = t.bound();
-        if (auto s = t.source()) {
-            d["layer"] = to_godot(s->layer.str());
-            d["file"] = to_godot(s->file.str());
-            d["line"] = s->line;
+        if (auto src = t.source()) {
+            d["layer"] = to_godot(src->layer.str());
+            d["file"] = to_godot(src->file.str());
+            d["line"] = src->line;
         }
-        out[b->property] = d;
+        out[u->property] = d;
     }
     return out;
 }

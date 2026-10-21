@@ -20,6 +20,13 @@ On Baker 0.5.0.
   scenarios or objectives, listed through Godot's file access, so an exported game finds
   them in its package. The sample keeps one scenario a file in `sim/scenarios/`.
 - **`--console-port 0`** serves the console on a free port, which the game prints.
+- **Bindings at scale.** A path is one tweak, shared by every node that binds it, and
+  destroyed with the last of them: sixty units of two kinds bind two tweaks. A live edit of
+  one node's bound property is an edit of its path, so of every node that binds it. A node
+  whose path the data lacks keeps its own scene value, and gets it back when the data
+  drops the path.
+- **Paths keyed by the node:** `"units.{kind}.max_hp"` reads the node's `kind` as it binds.
+- **`BakerBinding.property_changed(property)`** follows each assignment from the data.
 
 ## 0.1.0 - 2026-10-21
 

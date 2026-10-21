@@ -36,6 +36,17 @@ the remote inspector sends, and checks the diff.
   The property holds the data's value and follows every reload, layer toggle and live
   edit. GDScript reads it as a plain property, with no call into Baker per frame. A path
   the data lacks leaves the scene's value standing.
+
+  Each path is one tweak, however many nodes bind it: a hundred units of one kind share
+  it, and a live edit of one is an edit of the kind. A path can take its key from the node,
+  so one binding in a base scene serves every scene that inherits it:
+
+  ```
+  bindings = {"max_hp": "units.{kind}.max_hp"}   # the node's `kind` names the record
+  ```
+
+  `property_changed(property)` follows each assignment from the data, for state the node
+  derives from it (current hit points from the maximum).
 - **The editor plugin** (`addons/baker/plugin.cfg`):
   - a dock with **Layers** (toggle each, in the running game too; hover to see what a
     layer changes), **Tweaks** (the edited scene's bound properties, their values and the
