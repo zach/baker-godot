@@ -20,6 +20,7 @@
 #include <godot_cpp/variant/callable_method_pointer.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 
+#include <cmath>
 #include <cstdio>
 #include <string>
 #include <string_view>
@@ -116,6 +117,10 @@ void BakerRuntime::_bind_methods() {
     ClassDB::bind_method(D_METHOD("write_back_to", "path", "layer"), &BakerRuntime::write_back_to);
     ClassDB::bind_method(D_METHOD("eval_request", "line"), &BakerRuntime::eval_request);
     ClassDB::bind_method(D_METHOD("get_console_port"), &BakerRuntime::get_console_port);
+    ClassDB::bind_method(D_METHOD("bind_function", "name", "function"),
+                         &BakerRuntime::bind_function);
+    ClassDB::bind_method(D_METHOD("is_simulating"), &BakerRuntime::is_simulating);
+    ClassDB::bind_method(D_METHOD("sim_ready"), &BakerRuntime::sim_ready);
     ClassDB::bind_static_method("BakerRuntime", D_METHOD("is_shipping"),
                                 &BakerRuntime::is_shipping);
     ClassDB::bind_static_method("BakerRuntime", D_METHOD("dev_only_files", "project_path"),
@@ -146,6 +151,7 @@ void BakerRuntime::_enter_tree() {
     singleton_ = this;
     read_arguments();
     if (!live_ && godot::FileAccess::file_exists(project_path_)) (void)open(project_path_);
+    if (!tool_args_.empty()) set_process(true);
     if constexpr (!baker::kShipping) {
         set_process(true);
         if (get_console_port())
@@ -186,6 +192,7 @@ godot::Error BakerRuntime::open(const String& project_path) {
     context_.reset();
     seen_epoch_ = kNoEpoch;
     context_ = std::make_unique<baker::Context>();
+    bind_functions(*context_);
     live_ = std::make_unique<baker::host::Live>(*context_);
     live_->config().set_writer([this](std::string_view path, std::string_view text) {
         return write_file(path, text, project_writes_);
@@ -221,8 +228,8 @@ godot::Error BakerRuntime::open(const String& project_path) {
 }
 
 void BakerRuntime::_process(double) {
+    if (!tool_args_.empty() && ++tool_frames_ == 2) run_tool_command();
     if constexpr (!baker::kShipping) {
-        if (!tool_args_.empty() && ++tool_frames_ == 2) run_tool_command();
         if (!live_) return;
         live_->begin_frame();  // reloads what was saved; answers the console
         if (capturing_ && session_dirty_) {
@@ -241,10 +248,6 @@ void BakerRuntime::read_arguments() {
         if (a == "--no-local" || a == "--baker") {
             skip_local_ = true;  // a run's results do not depend on whose machine it is on
             if (a == "--no-local") continue;
-            // sim and compare run in the scene (scenarios/runner.gd), shipping builds too;
-            // every other command is Baker's, in development builds only.
-            const std::string command = more ? to_std(args[i + 1]) : "";
-            if (is_shipping() || command == "sim" || command == "compare") break;
             for (++i; i < args.size(); ++i) {
                 const std::string t = to_std(args[i]);
                 if (t == "--out" && i + 1 < args.size())
@@ -307,43 +310,128 @@ int BakerRuntime::get_console_port() const {
 // --baker COMMAND: Baker's tool commands (host/commands.hpp), run once the scene is ready
 // and its bound properties' tweaks are registered, then quits with the command's status.
 void BakerRuntime::run_tool_command() {
-    int status = baker::host::kCommandError;
-    std::string out;
-    std::vector<const char*> argv{"baker"};
-    for (const std::string& a : tool_args_) argv.push_back(a.c_str());
-    auto line = baker::host::parse_command_line(int(argv.size()), argv.data());
+    tool_argv_ = {"baker"};
+    for (const std::string& a : tool_args_) tool_argv_.push_back(a.c_str());
+    auto line = baker::host::parse_command_line(int(tool_argv_.size()), tool_argv_.data());
     if (!line) {
         const std::string message(baker::to_string(line.error()));
         std::fprintf(stderr, "baker: %s\n", message.c_str());
-    } else if (line->write) {
+        return finish_tool(baker::host::kCommandError);
+    }
+    if (is_shipping() && line->command != "sim" && line->command != "compare") {
+        std::fputs("baker: a shipping build runs sim and compare only\n", stderr);
+        return finish_tool(baker::host::kCommandError);
+    }
+    if (line->write) {
         std::fputs(
             "baker: a game never writes into the project: promote --patch FILE gives "
             "the change for a person to apply\n",
             stderr);
-    } else {
-        const std::string project = project_file(project_path_);
-        line->project = project;
-        baker::host::CommandHooks hooks;
-        hooks.reader = reader();
-        hooks.output = [&out](std::string_view text) { out.append(text); };
-        if (skip_local_) (void)hooks.open.skip.add("local");
-        // The commands open a Config of their own, which binds the tweak registry, the bound
-        // properties' among them: close this one first.
-        live_.reset();
-        context_.reset();
-        status = baker::host::run_command(*line, hooks);
-        if (status < 0) {
-            std::fprintf(stderr, "baker: no command '%s'\n%s", argv[1],
-                         std::string(baker::host::command_help()).c_str());
-            status = baker::host::kCommandError;
-        }
+        return finish_tool(baker::host::kCommandError);
     }
-    std::fwrite(out.data(), 1, out.size(), stdout);
+    tool_project_ = project_file(project_path_);
+    line->project = tool_project_;
+    tool_hooks_.reader = reader();
+    tool_hooks_.output = [this](std::string_view text) { tool_output_.append(text); };
+    tool_hooks_.bind = [this](baker::Context& ctx) { bind_functions(ctx); };
+    if (skip_local_) (void)tool_hooks_.open.skip.add("local");
+    // The commands open a Config of their own, which binds the tweak registry, the bound
+    // properties' among them: close this one first.
+    live_.reset();
+    context_.reset();
+    if (line->command == "sim") {
+        // Driven from the game's frames (_physics_process): each run reloads the scene.
+        sim_ = std::make_unique<baker::host::SimRun>(*line, tool_hooks_);
+        godot::Engine::get_singleton()->set_physics_ticks_per_second(
+            int(std::lround(1.0 / sim_->step_seconds())));
+        set_physics_process_priority(1 << 30);  // after the game's nodes: their step is done
+        set_physics_process(true);
+        return;
+    }
+    int status = baker::host::run_command(*line, tool_hooks_);
+    if (status < 0) {
+        std::fprintf(stderr, "baker: no command '%s'\n%s", tool_argv_[1],
+                     std::string(baker::host::command_help()).c_str());
+        status = baker::host::kCommandError;
+    }
+    finish_tool(status);
+}
+
+void BakerRuntime::finish_tool(int status) {
+    std::fwrite(tool_output_.data(), 1, tool_output_.size(), stdout);
     std::fflush(stdout);
     std::fflush(stderr);
-    if (!tool_out_.empty() && !write_output(tool_out_, out)) status = baker::host::kCommandError;
+    if (!tool_out_.empty() && !write_output(tool_out_, tool_output_))
+        status = baker::host::kCommandError;
     tool_args_.clear();
     get_tree()->quit(status);
+}
+
+// Under --baker sim, once a physics tick, after the game's nodes have taken their step.
+void BakerRuntime::_physics_process(double) {
+    if (!sim_) return;
+    switch (sim_->wants()) {
+        case baker::host::SimRun::Wants::Reset:
+            // A fresh scene for each run; its script calls sim_ready() once it is set up.
+            if (!sim_reloading_) {
+                sim_reloading_ = true;
+                get_tree()->reload_current_scene();
+            }
+            break;
+        case baker::host::SimRun::Wants::Steps: sim_->step(); break;
+        case baker::host::SimRun::Wants::Done: {
+            const int status = sim_->status();
+            sim_.reset();
+            set_physics_process(false);
+            finish_tool(status);
+            break;
+        }
+    }
+}
+
+void BakerRuntime::sim_ready() {
+    if (!sim_ || !sim_reloading_ || sim_->wants() != baker::host::SimRun::Wants::Reset) return;
+    sim_reloading_ = false;
+    sim_->ready();
+}
+
+void BakerRuntime::bind_function(const String& name, const godot::Callable& function) {
+    const bool known = functions_.has(name);
+    functions_[name] = function;
+    if (!known && context_) bind_into(*context_, baker::Symbol(to_std(name)));
+}
+
+void BakerRuntime::bind_functions(baker::Context& ctx) {
+    const Array names = functions_.keys();
+    for (int64_t i = 0; i < names.size(); ++i)
+        bind_into(ctx, baker::Symbol(to_std(String(names[i]))));
+}
+
+// {name arg...}: the arguments evaluated, as Godot values, to the function bound under the
+// name now (a reloaded scene binds its own).
+void BakerRuntime::bind_into(baker::Context& ctx, baker::Symbol name) {
+    if (ctx.has_func(name)) return;
+    auto r = ctx.func(name, [this, name](baker::Args a) -> baker::Expected<baker::Node> {
+        const String key = to_godot(name.str());
+        const godot::Callable f = functions_.get(key, godot::Callable());
+        if (!f.is_valid())
+            return baker::Unexpected(a.error("its function is gone", baker::ErrorCode::NotFound));
+        Array args;
+        for (size_t i = 0; i < a.size(); ++i) {
+            auto v = a.eval(i);
+            if (!v) return v;
+            args.push_back(to_variant(*v));
+        }
+        const Variant result = f.callv(args);
+        if (result.get_type() == Variant::NIL) return baker::Node(int64_t(0));
+        baker::ValueList values;
+        if (!to_values(result, values) || values.nodes().size() != 1)
+            return baker::Unexpected(a.error("returned a " +
+                                             to_std(Variant::get_type_name(result.get_type())) +
+                                             ", not one value"));
+        return values.nodes()[0];
+    });
+    if (!r) (void)fail(r.error());
 }
 
 // The editor's messages: the prefix "baker:" is taken off before they reach here.

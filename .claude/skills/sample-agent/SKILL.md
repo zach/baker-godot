@@ -14,9 +14,12 @@ sample/data/tuning.dta            the game's data. Read it; never edit it.
 sample/data/agent.dta             YOUR layer, over the data. Every experiment goes here.
 sample/data/experiments/*.dta     experiment layers a person toggles (F1). Read only.
 user://baker/local.dta            one person's tuning. Never read, write, or rely on it.
-sample/scenarios/*.gd             scenarios and their objectives: what "good" means. Propose
-                                  changes to an objective by pull request only, never in the
+sample/sim/scenarios.dta          the scenarios: what a run does, as Baker data.
+sample/sim/objectives.dta         the objectives: what "good" means. Propose a change to an
+                                  objective or a scenario by pull request only, never in the
                                   same change as the data it judges.
+sample/sim/driver.gd              the player's functions scenarios call ({player.hold_jump},
+                                  {player.apex}, ...). Not yours.
 sample/player.gd, *.tscn          the game. Not yours: its bound properties read the data.
 ```
 
@@ -26,15 +29,16 @@ Build the extension once (README, "Building"). Then, from the repository's root,
 `G="godot --headless --fixed-fps 60 --path sample --"` (Godot 4.5; `--fixed-fps 60` runs the
 game's frames as fast as it can, each 1/60 s of game time, so `sim` gives the same results
 in a fraction of the time). Godot runs the game in `sample/`, so a
-relative path you give (`--out runs/before`, `compare`'s directories, `--patch`) is under
-`sample/`. Its banner comes first on stdout: read results from `--out` when you parse them.
+relative path you give (`--results runs/before`, `compare`'s directories, `--out`, `--patch`)
+is under `sample/`. Its banner comes first on stdout: read results from a file when you parse
+them (`--out FILE` writes any command's output to one).
 
 | Command | What it tells you |
 |---|---|
 | `$G --baker reference` | Every script function, global, shape, and pack. `--json` gives the same, plus every tweak: each bound property, its path, type, default and current value, and the range and step the game declares for it. Read it first, and keep a value you propose within its range: `check` fails a value outside it, or of the wrong type, and warns of a key no tweak reads, which is how a misspelling looks. |
-| `$G --baker check --json` | Errors, load problems, and calls to undefined functions in the data. `passed` false and exit 1 mean fix before anything else. |
-| `$G --baker sim [--scenario NAME] [--seeds 1-10] [--out DIR] [--json]` | Runs the scenarios headless (every one unless named), judges each run by its objectives. Exit 0: all passed; 1: an objective failed; 2: something could not run. `--out DIR` writes `DIR/results.json`. |
-| `$G --baker compare BEFORE AFTER` | Which objectives moved between two `sim --out` directories, as JSON; exit 1 if one broke. |
+| `$G --baker check --json` | Errors, load problems, and calls to undefined functions in the data, the scenarios and the objectives. `passed` false and exit 1 mean fix before anything else. |
+| `$G --baker sim [--scenario NAME] [--seeds 1-10] [--results DIR] [--json]` | Runs the scenarios headless (every one unless named), each from a fresh scene, and judges each run by its objectives. Exit 0: all passed; 1: an objective failed; 2: something could not run. `--results DIR` writes `DIR/results.json` (`baker.sim/1.1`), which `compare` reads. |
+| `$G --baker compare --before DIR --after DIR` | Which objectives moved between two `sim --results` directories, as `baker.compare/1` JSON; exit 1 if one broke. |
 | `$G --baker eval --json "{config.explain player.jump.height}"` | A value and every layer that sets it, with file and line; any `{config...}` command, answered as the console answers. |
 | `$G --baker diff` | Exactly what `agent.dta` changes: path, old value, new value. |
 | `$G --baker promote --patch FILE` | What promotion would write into `tuning.dta`, as a diff a person reviews and applies with `git apply -p1` from `sample/`. It writes nothing else: promotion is a person's decision. |
@@ -47,15 +51,15 @@ random number: the same data and scenario give the same result on every seed.
 ## The loop
 
 1. **Read** `$G --baker reference --json` (the tweaks are the values you can tune),
-   `sample/data/tuning.dta` (each value's comment says what it does), and the objectives in
-   `sample/scenarios/*.gd`.
-2. **Baseline:** `$G --baker sim --seeds 1-3 --out runs/before` before you change anything,
+   `sample/data/tuning.dta` (each value's comment says what it does), and the scenarios and
+   objectives in `sample/sim/`.
+2. **Baseline:** `$G --baker sim --seeds 1-3 --results runs/before` before you change anything,
    over every scenario. Note what passes.
 3. **Change** `sample/data/agent.dta`. Keep each change small and say in a `;` comment why:
    `(player (jump (height 120)))  ; clears the first platform with room`.
 4. **`$G --baker check --json`**: exit 0, or fix it.
-5. **`$G --baker sim --seeds 1-3 --out runs/after`**, then
-   **`$G --baker compare runs/before runs/after`**: it names each objective that broke
+5. **`$G --baker sim --seeds 1-3 --results runs/after`**, then
+   **`$G --baker compare --before runs/before --after runs/after`**: it names each objective that broke
    (passed on a scenario and seed, now fails) and exits 1. A fix that breaks another
    objective is not done; that is the most common way a change fails review. `sim`'s exit
    status is the verdict.

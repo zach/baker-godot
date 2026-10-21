@@ -79,8 +79,8 @@ carry over.
   ```sh
   godot --headless --path sample -- --baker check --json         # baker.check/1.3
   godot --headless --path sample -- --baker reference --json     # vocabulary, tweaks, shapes
-  godot --headless --fixed-fps 60 --path sample -- --baker sim --seeds 1-3 --out runs/before
-  godot --headless --path sample -- --baker compare runs/before runs/after
+  godot --headless --fixed-fps 60 --path sample -- --baker sim --seeds 1-3 --results runs/before
+  godot --headless --path sample -- --baker compare --before runs/before --after runs/after
   godot --headless --path sample -- --baker eval --json "{config.explain player.jump.height}"
   godot --headless --path sample -- --baker diff                 # what agent.dta changes
   godot --headless --path sample -- --baker promote --patch agent.patch
@@ -89,18 +89,24 @@ carry over.
   These are Baker's own tool commands (its host kit), reading through Godot's file access.
   `--out FILE` writes a command's result to a file too (a `user://` path as well); `promote`
   never writes into the project: `--patch` gives the change for a person to apply.
-- **`sim`** runs the scenarios in `sample/scenarios/` (all unless `--scenario NAME`), each
-  run in a fresh scene, and judges each by its objectives: results as `stacks.sim/1.1` (in
-  `DIR/results.json` with `--out DIR`; with a `host` object giving the layers and whether
-  the build ships), exit 1 if an objective failed. **`compare`** says which objectives broke
-  or were fixed between two runs (`stacks.compare/1.1`), and exits 1 if one broke. `reach`
-  asks whether a jump clears the first platform and stays below the second; the shipped
+- **`sim`** is Baker's: it runs the scenarios in `sample/sim/scenarios.dta` (all unless
+  `--scenario NAME`) and judges each run by the objectives in `sample/sim/objectives.dta`,
+  results as `baker.sim/1.1` (in `DIR/results.json` with `--results DIR`), exit 1 if an
+  objective failed. Scenarios and objectives are data: they call the player's functions
+  (`sample/sim/driver.gd`, bound with `Baker.bind_function`), and `check` holds those calls
+  to the functions the game binds. The game drives each run from its own frames
+  (Baker's `SimRun`): before each run it reloads the scene, and each physics tick is one
+  step. **`compare`** says which objectives broke or were fixed between two runs
+  (`baker.compare/1`), and exits 1 if one broke. `reach` asks whether a jump clears the first platform and stays below the second; the shipped
   data's does not clear it. With `--fixed-fps 60`, Godot runs frames as fast as it can,
   each 1/60 s of game time: the same results, about 20 times sooner than at the clock's
   pace.
 - **The agent layer.** An agent proposes in `data/agent.dta`, which version control
   ignores. `promote` writes nothing but a patch: a person applies it (`git apply -p1`) or
   keeps the values from the editor.
+- **The game's functions in Baker's script.** `Baker.bind_function("player.apex", apex)` makes
+  a GDScript function `{player.apex}`: scenarios, objectives, `eval` and the console call it,
+  and `check` knows it. Binding a name again replaces it, so a reloaded scene binds its own.
 - **The running game's console** (Baker's), on 127.0.0.1 only: `-- --console-port 7000`. A line
   `(1 {config.toggle agent})` is answered with one line of `baker.reply/1.1` JSON. Baker's
   Config tools are bound (`config.explain`, `config.set`, `config.toggle`,
@@ -144,7 +150,7 @@ step (run it under a display, such as `xvfb-run`).
 
 ## Building
 
-CMake fetches godot-cpp (4.5) and Baker 0.3.0 (its core and its host kit), and puts the library in
+CMake fetches godot-cpp (4.5) and Baker 0.4.0 (its core and its host kit), and puts the library in
 `sample/addons/baker/bin/`:
 
 ```sh

@@ -1,0 +1,17 @@
+; The sample's scenarios: `--baker sim` runs each, from a fresh scene, for its seconds, and
+; judges it by its objectives (objectives.dta). The game draws no random numbers, so every
+; seed gives the same run.
+
+; From standing, one jump held to its apex and back to the ground.
+(scenario jump (desc "One held jump peaks at the data's jump height")
+   (seconds 2)
+   (at 0.5 {player.hold_jump})            ; settled on the floor first
+   (objectives jump.apex))
+
+; The same jump, against the level: the first platform's top is 100 px above the floor, the
+; second's 180 px. A jump should clear the first with 10 px to spare, and the climb should
+; take two jumps, so a jump from the floor stays at least 20 px below the second.
+(scenario reach (desc "A jump from the floor clears the first platform, not the second")
+   (seconds 2)
+   (at 0.5 {player.hold_jump})
+   (objectives reach.first_platform reach.not_second_platform))

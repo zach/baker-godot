@@ -8,4 +8,8 @@
       ; What an agent tunes, for review: never shipped until a person promotes it.
       (agent "data/agent.dta" optional dev_only)
       ; Experiments: toggled while playing (F1).
-      (floaty "data/experiments/floaty.dta" disabled)))
+      (floaty "data/experiments/floaty.dta" disabled))
+   ; What --baker sim runs, and what judges each run (sim/driver.gd gives the player's
+   ; functions they call).
+   (scenarios "sim/scenarios.dta")
+   (objectives "sim/objectives.dta"))

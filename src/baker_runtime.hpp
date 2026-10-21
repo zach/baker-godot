@@ -23,13 +23,20 @@
 //                       {config.explain p}, {config.set p v}, {config.toggle layer}, ...
 //   --console-write     also config.write_back and config.promote
 //   --baker COMMAND...  run one of Baker's tool commands (check, reference, eval, diff,
-//                       promote --patch) once the scene is ready, then quit; --out FILE
-//                       writes its output there too;
-//                       sim and compare are the scene's (scenarios/runner.gd)
+//                       promote --patch, sim, compare) once the scene is ready, then quit;
+//                       --out FILE writes its output there too. Shipping builds run sim
+//                       and compare only.
+//
+// sim runs the project's scenarios (sim/scenarios.dta) from the game's own frames: before
+// each run it reloads the current scene, whose script calls sim_ready() once it is set up,
+// then each physics tick is one step of the run, at the rate the run asks for. Functions a
+// script binds (bind_function) are Baker's script functions: in scenarios and objectives,
+// in check, and at the console.
 //   --no-local          leave out the `local` layer; every --baker command does, in shipping
 //                       builds too
 
 #include <baker/config.hpp>
+#include <baker/host/commands.hpp>
 #include <baker/host/live.hpp>
 #include <baker/script.hpp>
 
@@ -62,6 +69,7 @@ public:
     void _enter_tree() override;
     void _exit_tree() override;
     void _process(double delta) override;
+    void _physics_process(double delta) override;
 
     // --- The stack. ---
     // Opens the project file: its layers, pack levels, include directories, and defines.
@@ -114,6 +122,15 @@ public:
     // JSON, anything else with text. Debug builds only; the Config tools that write files
     // are bound only with --console-write.
     godot::String eval_request(const godot::String& line);
+    // Binds `function` as Baker's script function `name`: {name arg...} calls it with the
+    // arguments as Godot values, and its result is the call's value (nil gives 0). Bound in
+    // the console's Context now, and in every tool command's. Binding a name again replaces
+    // the function, so a scene that is reloaded binds its own.
+    void bind_function(const godot::String& name, const godot::Callable& function);
+    // Under --baker sim: whether a run is in progress, and, from the scene the run reloaded,
+    // that it is set up and the run may step.
+    [[nodiscard]] bool is_simulating() const noexcept { return sim_ != nullptr; }
+    void sim_ready();
     // The console's port, or 0 if none listens.
     [[nodiscard]] int get_console_port() const;
     // A shipping build (an export): no reloads, live edits, write-back, console or tools.
@@ -150,6 +167,9 @@ private:
     void read_arguments();
     std::string answer(const std::string& line);
     void run_tool_command();
+    void bind_functions(baker::Context& ctx);
+    void bind_into(baker::Context& ctx, baker::Symbol name);
+    void finish_tool(int status);
     bool debugger_message(const godot::String& message, const godot::Array& data);
 
     static BakerRuntime* singleton_;
@@ -170,7 +190,14 @@ private:
 
     // Tools and agents (debug builds).
     std::vector<std::string> tool_args_;  // --baker COMMAND ...: run once the scene is ready
-    std::string tool_out_;                // --out FILE
+    std::vector<const char*> tool_argv_;  // what the command line's views point into
+    std::string tool_project_;            // the project file, as the commands open it
+    std::string tool_output_;             // what the command wrote
+    baker::host::CommandHooks tool_hooks_;
+    std::unique_ptr<baker::host::SimRun> sim_;  // --baker sim, in progress
+    bool sim_reloading_ = false;                // the scene is being reset for the next run
+    godot::Dictionary functions_;               // bind_function: name -> Callable
+    std::string tool_out_;                      // --out FILE
     int tool_frames_ = 0;
     int console_port_ = -1;  // --console-port N; -1: none
     bool console_write_ = false;

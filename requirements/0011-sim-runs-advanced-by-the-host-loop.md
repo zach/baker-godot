@@ -1,5 +1,9 @@
 # 0011: A scenario run the host advances from its own loop
 
+**Shipped** in Baker 0.4.0 (`baker::host::SimRun`, `baker.sim/1.1`); the sample's scenarios
+and objectives are data in `sample/sim/`, run by the kit's `sim` from the game's physics
+ticks, and its own runner and result formats are gone.
+
 ## The need
 
 A host can run the kit's scenarios by advancing each run itself, one fixed step per frame

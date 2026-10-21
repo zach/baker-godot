@@ -34,17 +34,20 @@ check() {
     if [ "$1" -eq 0 ]; then echo "ok   $2"; else echo "FAIL $2"; failures=$((failures + 1)); fi
 }
 [ -f "$game" ]; check $? "exports $preset"
-timeout 60 "$game" --headless --fixed-fps 60 -- --baker sim --scenario jump --out "$work/sim" >/dev/null 2>&1
+timeout 60 "$game" --headless --fixed-fps 60 -- --baker sim --scenario jump --results "$work/sim" \
+    >/dev/null 2>&1
 check $? "the exported game runs the jump scenario"
 "$py" - "$work/sim/results.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
-print("     ", json.dumps(d["host"]), json.dumps(d["runs"][0]["objectives"]))
-assert d["status"] == "passed" and d["host"]["shipping"], d
-assert d["host"]["layers"] == ["default"], d  # local and agent are dev_only: never in an export
-assert abs(d["runs"][0]["objectives"][0]["value"] - 96) <= 2, d  # tuning.dta's, not the scene's 80
+print("     ", json.dumps(d["runs"][0]["objectives"]))
+assert d["schema"] == "baker.sim/1.1" and d["status"] == "passed", d
+# tuning.dta's 96: not the scene's 80, nor the 300 of an agent.dta (dev_only: never shipped)
+assert abs(d["runs"][0]["objectives"][0]["value"] - 96) <= 2, d
 PY
-check $? "  a shipping build, tuning.dta's values read from the package, without local or agent.dta"
+check $? "  tuning.dta's values read from the package, without local or agent.dta"
+timeout 60 "$game" --headless -- --baker check >/dev/null 2>&1; [ $? -eq 2 ]
+check $? "  a shipping build: it runs sim and compare, and refuses check"
 pck="${game%.*}.pck"  # the export plugin leaves dev_only layers' files out of the package
 [ -f "$pck" ] && ! grep -q "height 300" "$pck"; check $? "  and the package holds no agent.dta"
 echo "$failures failure(s)"

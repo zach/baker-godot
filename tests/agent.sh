@@ -33,14 +33,13 @@ tool() {  # tool OUT ARGS...: a tool command, its output in $work/OUT
     local out="$1"; shift
     timeout 60 "$godot" --headless --path "$work" -- --baker "$@" --out "$work/$out" >/dev/null 2>&1
 }
-sim() {  # sim OUTDIR: every scenario over seeds 1-3, stacks.sim/1.1 in $work/OUTDIR
-    timeout 120 "$godot" --headless --fixed-fps 60 --path "$work" -- --baker sim --seeds 1-3 --out "$work/$1" \
+sim() {  # sim OUTDIR: every scenario over seeds 1-3, baker.sim/1.1 in $work/OUTDIR
+    timeout 120 "$godot" --headless --fixed-fps 60 --path "$work" -- --baker sim --seeds 1-3 --results "$work/$1" \
         >/dev/null 2>&1
 }
-compare() {  # compare BEFORE AFTER OUT: stacks.compare/1.1 in $work/OUT
-    timeout 60 "$godot" --headless --path "$work" -- --baker compare "$work/$1" "$work/$2" \
-        2>/dev/null | sed -n '/^{/,$p' > "$work/$3"
-    return "${PIPESTATUS[0]}"
+compare() {  # compare BEFORE AFTER OUT: baker.compare/1 in $work/OUT
+    timeout 60 "$godot" --headless --path "$work" -- --baker compare --before "$work/$1" \
+        --after "$work/$2" --out "$work/$3" >/dev/null 2>&1
 }
 json() {  # json FILE PYTHON-EXPRESSION-OF-d: exit 0 if true
     "$py" -c "import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if ($2) else 1)" "$work/$1"
@@ -76,18 +75,28 @@ check $? "    with a warning that names it"
 # 2.
 sim before; status=$?
 [ "$status" -eq 1 ]; check $? "the baseline: reach fails on the shipped data (sim exits 1)"
-json before/results.json 'd["schema"] == "stacks.sim/1.1" and d["status"] == "failed"'
-check $? "  as stacks.sim/1.1 results"
+json before/results.json 'd["schema"] == "baker.sim/1.1" and d["status"] == "failed"'
+check $? "  as baker.sim/1.1 results"
 json before/results.json '[(r["scenario"], r["seed"]) for r in d["runs"]] == [("jump", s) for s in (1, 2, 3)] + [("reach", s) for s in (1, 2, 3)]'
 check $? "  every scenario, each seed a run of its own"
-json before/results.json 'd["host"]["layers"] == ["default", "agent"]'
-check $? "  run without the local layer"
+json before/results.json '[o["value"] for r in d["runs"] for o in r["objectives"]] == [96.06] * 9'
+check $? "  the same apex in every run: 96.06"
+tool layers.json eval --json "{config.layers}"
+json layers.json '[l["layer"] for l in d["value"]] == ["default", "agent", "floaty", "scratch"]'
+check $? "  the tool commands leave out the local layer"
+# A scenario is data: check holds its calls to the game's functions.
+cp "$work/sim/scenarios.dta" "$work/scenarios.dta.bak"
+printf '(scenario typo (seconds 1) (at 0.5 {player.hold_jmup}))\n' >> "$work/sim/scenarios.dta"
+tool typo.json check --json; [ $? -eq 1 ]; check $? "  a scenario calling a function the game lacks fails check"
+json typo.json '[x["name"] for x in d["demand"]] == ["player.hold_jmup"]'
+check $? "    which names it"
+mv "$work/scenarios.dta.bak" "$work/sim/scenarios.dta"
 
 # 3.
 printf '(player (jump (height 200)))\n' > "$work/data/agent.dta"
 sim over; compare before over over.json; status=$?
 [ "$status" -eq 1 ]; check $? "a jump of 200: compare exits 1"
-json over.json 'd["schema"] == "stacks.compare/1.1" and d["broke"] == 1 and {o["name"]: o["moved"] for o in d["objectives"]} == {"jump.apex": "same", "reach.first_platform": "fixed", "reach.not_second_platform": "broke"}'
+json over.json 'd["schema"] == "baker.compare/1" and d["broke"] == 1 and {o["name"]: o["moved"] for o in d["objectives"]} == {"jump.apex": "same", "reach.first_platform": "fixed", "reach.not_second_platform": "broke"}'
 check $? "  it fixed the first platform and broke the second: not done"
 printf '; The agent: a higher jump, to clear the first platform.\n(player (jump (height 120)))\n' \
     > "$work/data/agent.dta"

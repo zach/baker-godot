@@ -1,7 +1,8 @@
 ## The sample level: a floor, some platforms, the player, and a line of help.
 ##
-## F1 toggles the `floaty` experiment layer while playing. Run with
-## `-- --baker sim` to run the scenarios in res://scenarios/ instead of playing.
+## F1 toggles the `floaty` experiment layer while playing. Run with `-- --baker sim` to run
+## the scenarios in sim/scenarios.dta instead of playing: each run reloads this scene, which
+## tells Baker when it is set up.
 extends Node2D
 
 const PLATFORMS := [
@@ -21,20 +22,9 @@ func _ready() -> void:
 		_add_platform(rect)
 	Baker.changed.connect(_show_layers)
 	_show_layers()
-	_run_scenarios()
-
-
-## Under --baker sim, each fresh instance of this scene runs the next scenario
-## (scenarios/runner.gd), the runner kept above the scene across reloads; --baker compare
-## is answered there too.
-func _run_scenarios() -> void:
-	var runner := get_tree().root.get_node_or_null("BakerRunner")
-	if runner == null:
-		runner = preload("res://scenarios/runner.gd").from_arguments()
-		if runner == null:
-			return
-		get_tree().root.add_child.call_deferred(runner)
-	runner.attach.call_deferred(self)
+	add_child(preload("res://sim/driver.gd").new())
+	if Baker.is_simulating():
+		Baker.sim_ready.call_deferred()
 
 
 func _unhandled_input(event: InputEvent) -> void:
