@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+env:
+  GODOT_VERSION: 4.5.1
+
+jobs:
+  format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: clang-format-18 --dry-run --Werror src/*.cpp src/*.hpp
+
+  sample:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            godot: Godot_v4.5.1-stable_linux.x86_64
+            zip: Godot_v4.5.1-stable_linux.x86_64.zip
+            template: linux_release.x86_64
+            preset: Linux
+          - os: windows-2022
+            godot: Godot_v4.5.1-stable_win64_console.exe
+            zip: Godot_v4.5.1-stable_win64.exe.zip
+            template: windows_release_x86_64.exe
+            preset: Windows
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the extension (debug and shipping)
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Debug -DGODOTCPP_TARGET=template_debug -DBAKER_GODOT_WERROR=ON
+          cmake --build build --config Debug --parallel 4
+          cmake -B build-release -DCMAKE_BUILD_TYPE=Release -DGODOTCPP_TARGET=template_release -DBAKER_GODOT_WERROR=ON
+          cmake --build build-release --config Release --parallel 4
+      - name: Fetch Godot
+        run: |
+          curl -sSL -o godot.zip https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/${{ matrix.zip }}
+          7z x -ogodot godot.zip >/dev/null
+          chmod +x godot/* || true
+      - name: Import the sample
+        # A fresh headless import of a project with a GDExtension can crash on exit in
+        # Godot 4.5.1, with godot-cpp's own example too; the second import is clean.
+        run: |
+          godot/${{ matrix.godot }} --headless --path sample --import || true
+          godot/${{ matrix.godot }} --headless --path sample --import
+      - name: Runtime tests
+        timeout-minutes: 2
+        run: godot/${{ matrix.godot }} --headless --path sample res://tests/runtime_test.tscn
+      - name: Scenario jump
+        timeout-minutes: 2
+        run: godot/${{ matrix.godot }} --headless --fixed-fps 60 --path sample -- --baker sim --scenario jump
+      - name: The demonstration, in a headless editor
+        timeout-minutes: 5
+        run: tests/e2e.sh "$PWD/godot/${{ matrix.godot }}"
+      - name: An agent's loop, through the tool commands and the console
+        timeout-minutes: 5
+        run: tests/agent.sh "$PWD/godot/${{ matrix.godot }}"
+      - name: A release export, run
+        timeout-minutes: 10
+        run: |
+          "$(command -v python3 || command -v python)" tools/fetch_template.py "$GODOT_VERSION" ${{ matrix.template }}
+          tests/export.sh "$PWD/godot/${{ matrix.godot }}" ${{ matrix.preset }}

@@ -1,0 +1,5 @@
+; Experiment: a floatier jump, slower to the top and gentler on the way down.
+(player
+   (jump
+      (time_to_peak 0.5)
+      (fall_multiplier 1.1)))

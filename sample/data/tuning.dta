@@ -1,0 +1,15 @@
+; Tuning for the sample platformer. Distances in pixels, times in seconds.
+
+(player
+   (run
+      (speed 220)            ; top speed on the ground
+      (accel 1400)           ; to top speed
+      (friction 1800))       ; to rest, with no input
+   (air_control 0.65)        ; the share of accel and friction kept in the air
+   (jump
+      (height 96)            ; apex above the takeoff
+      (time_to_peak 0.38)    ; gravity follows from height and time
+      (fall_multiplier 1.6)  ; gravity while falling, as a multiple
+      (coyote 0.1)           ; a jump still counts this long after leaving a ledge
+      (buffer 0.12))         ; a jump pressed this long before landing counts
+   (max_fall 900))

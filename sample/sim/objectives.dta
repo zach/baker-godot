@@ -1,0 +1,16 @@
+; What judges a scenario's run. Each measures a number from the game ({player.apex}: how
+; high the last jump rose above its takeoff, sim/driver.gd), then passes if its test of
+; $value is nonzero.
+
+(objective jump.apex (desc "Within 2 px of the data's jump height")
+   (measure {player.apex})
+   (pass {and {>= $value {- {config.get player.jump.height} 2}}
+              {<= $value {+ {config.get player.jump.height} 2}}}))
+
+(objective reach.first_platform (desc "Clears the first platform, 100 px up, by 10 px")
+   (measure {player.apex})
+   (pass {>= $value 110}))
+
+(objective reach.not_second_platform (desc "Stays 20 px below the second platform, 180 px up")
+   (measure {player.apex})
+   (pass {<= $value 160}))
