@@ -14,6 +14,10 @@ again, in 2 to 5 tool calls (3.1 on average), for $1.04. That run's rows are not
 `--fixed-fps 60`), same protocol: 9 of 9, in 3 to 4 tool calls (3.1 on average), 17 s a
 run on average instead of about 31, for $0.95. Its rows are not in `results.csv` either.
 
+**Rerun on Baker 0.4.0** (410cca1: the scenarios and objectives as Baker data, run by
+Baker's `sim` and `compare`, with `--results` and `--before`/`--after`), same protocol: 9 of
+9, in 3 to 5 tool calls (3.7 on average), 17 s a run, for $1.12. Not in `results.csv`.
+
 ## Protocol
 
 - **Tasks** (`harness.py`): three, each a person's complaint over a fresh copy of the
