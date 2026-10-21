@@ -5,7 +5,8 @@
 #
 #   tests/agent.sh path/to/godot
 #
-#  1. check, and the vocabulary with the bound properties as tweaks;
+#  1. check, and the vocabulary with the bound properties as tweaks; check fails a value of
+#     the wrong type or out of its property's range, and warns of a misspelled key;
 #  2. the baseline: sim over every scenario and seeds 1-3; `reach` fails on the shipped data;
 #  3. a proposal that overshoots: compare names the objective it broke, and exits 1;
 #     the one that does not: check passes, diff shows it, compare names only a fix;
@@ -53,6 +54,24 @@ json ref.json 'any(t["path"] == "player.jump.height" for t in d["tweaks"]["tweak
 check $? "  lists the bound properties as tweaks"
 json ref.json '[(t["range"], t["step"]) for t in d["tweaks"]["tweaks"] if t["path"] == "player.jump.height"] == [([16, 320], 1)]'
 check $? "  with the range and step of each property's @export_range"
+# check holds the data to the bound properties' tweaks: a value of the wrong type, or out of
+# the property's range, fails it; a misspelled key beside them is a warning.
+bad() {  # bad BODY OUT: an agent's proposal, checked into $work/OUT; its exit status
+    printf '%s\n' "$1" > "$work/data/agent.dta"
+    tool "$2" check --json; local status=$?
+    rm -f "$work/data/agent.dta"
+    return $status
+}
+bad '(player (jump (height "tall")))' bad1.json; [ $? -eq 1 ]
+check $? "  a string for a float fails check (exit 1)"
+json bad1.json 'not d["passed"] and [(e["file"], e["line"]) for e in d["tweak_errors"]] == [("data/agent.dta", 1)]'
+check $? "    located in agent.dta"
+bad '(player (jump (height 1000)))' bad2.json; [ $? -eq 1 ]
+check $? "  a height outside its range fails check: $("$py" -c 'import json,sys; print(json.load(open(sys.argv[1]))["tweak_errors"][0]["message"])' "$work/bad2.json" 2>/dev/null)"
+bad '(player (jump (hieght 120)))' bad3.json; [ $? -eq 0 ]
+check $? "  a misspelled key passes check"
+json bad3.json 'd["passed"] and any("hieght" in w["message"] for w in d["tweak_warnings"])'
+check $? "    with a warning that names it"
 
 # 2.
 sim before; status=$?

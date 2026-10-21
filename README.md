@@ -77,7 +77,7 @@ carry over.
   properties are tweaks:
 
   ```sh
-  godot --headless --path sample -- --baker check --json         # baker.check/1
+  godot --headless --path sample -- --baker check --json         # baker.check/1.3
   godot --headless --path sample -- --baker reference --json     # vocabulary, tweaks, shapes
   godot --headless --fixed-fps 60 --path sample -- --baker sim --seeds 1-3 --out runs/before
   godot --headless --path sample -- --baker compare runs/before runs/after
@@ -144,7 +144,7 @@ step (run it under a display, such as `xvfb-run`).
 
 ## Building
 
-CMake fetches godot-cpp (4.5) and Baker 0.2.1 (its core and its host kit), and puts the library in
+CMake fetches godot-cpp (4.5) and Baker 0.3.0 (its core and its host kit), and puts the library in
 `sample/addons/baker/bin/`:
 
 ```sh

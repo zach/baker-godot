@@ -1,5 +1,9 @@
 # 0010: check holds the data to the tweaks the game declares
 
+**Shipped** in Baker 0.3.0 (`check_tweaks`, `CheckReport::tweak_errors` and
+`tweak_warnings`, `baker.check/1.3`); `tests/agent.sh` checks the three edits below: two fail
+`check`, one warns.
+
 ## The need
 
 `check` compares the data with every tweak registered when it runs, and reports, located
