@@ -1,5 +1,8 @@
 # 0015: The live loop's console on a free port
 
+**Shipped** in Baker 0.5.0 (`LiveOptions::console_any_port`); `--console-port 0` uses it, and
+`tests/agent.sh` reads the port the game prints.
+
 ## The need
 
 A host can ask the live loop for its console on any free port, as `Console::listen(0)`

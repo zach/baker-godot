@@ -212,6 +212,7 @@ godot::Error BakerRuntime::open(const String& project_path) {
             },
         .watch = watch_ && game && godot::OS::get_singleton()->is_debug_build(),
         .console_port = uint16_t(console_port_ > 0 ? console_port_ : 0),
+        .console_any_port = console_port_ == 0,
         .console_write = console_write_,
         .changed = [this](const baker::Config&) { changed_since(); },
         .log =
@@ -333,6 +334,9 @@ void BakerRuntime::run_tool_command() {
     tool_project_ = project_file(project_path_);
     line->project = tool_project_;
     tool_hooks_.reader = reader();
+    tool_hooks_.list = [](std::string_view dir, baker::Callback<void(std::string_view)> file) {
+        return list_files(dir, file);
+    };
     tool_hooks_.output = [this](std::string_view text) { tool_output_.append(text); };
     tool_hooks_.bind = [this](baker::Context& ctx) { bind_functions(ctx); };
     // The game's own reads (get_value, explain, ...) see the command's data, as it loads.
@@ -419,42 +423,58 @@ namespace {
 
 // How many arguments `f` takes: at most its parameters, at least those without a default.
 // The defaults are known for an object's method; a lambda must be given all of them.
-void arity(const godot::Callable& f, int64_t& least, int64_t& most) {
-    most = f.get_argument_count();
-    least = most;
-    const godot::Object* object = f.get_object();
-    if (!object || f.is_custom()) return;
+// Baker's name for the type a GDScript parameter declares; "value" for any other, or none.
+std::string_view baker_type(Variant::Type t) {
+    switch (t) {
+        case Variant::BOOL: return "bool";
+        case Variant::INT: return "int";
+        case Variant::FLOAT: return "float";
+        case Variant::STRING: return "string";
+        case Variant::STRING_NAME: return "symbol";
+        default: return "value";
+    }
+}
+
+// `f`'s parameters as Baker describes them: an object's method by its declared types, the
+// ones with defaults optional; a lambda by its count alone, each any value.
+std::vector<baker::ParamDescription> describe(const godot::Callable& f) {
+    std::vector<baker::ParamDescription> params(
+        size_t(std::max<int64_t>(0, f.get_argument_count())),
+        baker::ParamDescription{.type = "value"});
+    const godot::Object* object = f.is_custom() ? nullptr : f.get_object();
+    if (!object) return params;
     const godot::StringName method = f.get_method();
     const Array methods = object->get_method_list();
     for (int64_t i = 0; i < methods.size(); ++i) {
         const Dictionary m = methods[i];
         if (godot::StringName(m.get("name", "")) != method) continue;
-        least = std::max<int64_t>(0, most - Array(m.get("default_args", Array())).size());
-        return;
+        const Array args = m.get("args", Array());
+        for (size_t k = 0; k < params.size() && int64_t(k) < args.size(); ++k)
+            params[k].type =
+                baker_type(Variant::Type(int64_t(Dictionary(args[int64_t(k)]).get("type", 0))));
+        const size_t defaults = size_t(Array(m.get("default_args", Array())).size());
+        for (size_t k = params.size() - std::min(defaults, params.size()); k < params.size(); ++k)
+            params[k].kind = "optional";
+        break;
     }
+    return params;
 }
 
 }  // namespace
 
 // {name arg...}: the arguments evaluated, as Godot values, to the function bound under the
-// name now (a reloaded scene binds its own). A call with more arguments than the function
-// takes, or fewer than it needs, is an error at the call.
+// name now (a reloaded scene binds its own). Declared with the function's parameters, so
+// check counts a call's arguments and checks their types, and a call is held to them.
 void BakerRuntime::bind_into(baker::Context& ctx, baker::Symbol name) {
     if (ctx.has_func(name)) return;
-    auto r = ctx.func(name, [this, name](baker::Args a) -> baker::Expected<baker::Node> {
+    const std::vector<baker::ParamDescription> params =
+        describe(functions_.get(to_godot(name.str()), godot::Callable()));
+    const baker::OverloadDescription overload{.params = params};
+    auto body = [this, name](baker::Args& a) -> baker::Expected<baker::Node> {
         const String key = to_godot(name.str());
         const godot::Callable f = functions_.get(key, godot::Callable());
         if (!f.is_valid())
             return baker::Unexpected(a.error("its function is gone", baker::ErrorCode::NotFound));
-        int64_t least = 0, most = 0;
-        arity(f, least, most);
-        const auto given = int64_t(a.size());
-        if (given < least || given > most)
-            return baker::Unexpected(
-                a.error("takes " +
-                        (least == most ? std::to_string(most)
-                                       : std::to_string(least) + " to " + std::to_string(most)) +
-                        " argument(s), given " + std::to_string(given)));
         Array args;
         for (size_t i = 0; i < a.size(); ++i) {
             auto v = a.eval(i);
@@ -469,7 +489,8 @@ void BakerRuntime::bind_into(baker::Context& ctx, baker::Symbol name) {
                                              to_std(Variant::get_type_name(result.get_type())) +
                                              ", not one value"));
         return values.nodes()[0];
-    });
+    };
+    auto r = ctx.declare(name, std::span<const baker::OverloadDescription>(&overload, 1), body);
     if (!r) (void)fail(r.error());
 }
 

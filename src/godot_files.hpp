@@ -3,6 +3,7 @@
 // Baker's file access, through Godot's: a layer's path is a project path (res://), a user
 // path (user://), or relative to the project's root.
 
+#include <baker/callback.hpp>
 #include <baker/parse.hpp>
 
 #include <cstdint>
@@ -25,6 +26,12 @@ namespace baker_godot {
 // Writes a tool's output: a res:// or user:// path, or one on the disk as given (relative to
 // where the tool runs).
 [[nodiscard]] bool write_output(const std::string& path, std::string_view text);
+
+// The files in a directory Baker names, through Godot's file access (an export's pack too):
+// `file` gets each one's path, the directory's joined with its name. False if there is no
+// such directory.
+[[nodiscard]] bool list_files(std::string_view dir,
+                              const baker::Callback<void(std::string_view path)>& file);
 
 // Where a path Baker names is on the disk, for the watcher: none for a file Godot packs.
 [[nodiscard]] bool disk_path(std::string_view path, std::string& out);

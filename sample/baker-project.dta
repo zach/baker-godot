@@ -11,5 +11,5 @@
       (floaty "data/experiments/floaty.dta" disabled))
    ; What --baker sim runs, and what judges each run (sim/driver.gd gives the player's
    ; functions they call).
-   (scenarios "sim/scenarios.dta")
+   (scenarios "sim/scenarios")            ; a directory: one .dta file a scenario
    (objectives "sim/objectives.dta"))

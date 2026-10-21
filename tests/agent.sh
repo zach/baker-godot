@@ -10,7 +10,8 @@
 #  2. the baseline: sim over every scenario and seeds 1-3; `reach` fails on the shipped data;
 #  3. a proposal that overshoots: compare names the objective it broke, and exits 1;
 #     the one that does not: check passes, diff shows it, compare names only a fix;
-#  4. A/B in the running game over the console: explain, toggle the agent layer, journal;
+#  4. A/B in the running game over the console (on a free port): explain, toggle the agent
+#     layer, journal;
 #  5. promote --patch writes a one-line patch to tuning.dta and changes nothing; it applies.
 #     A patch or --out it cannot write (no directory; on Linux, /dev/full) exits 2.
 set -uo pipefail
@@ -23,12 +24,17 @@ game=""
 cp -r "$here/sample/." "$work/"
 rm -rf "$work/.godot" "$work/data/agent.dta"
 # A probe, for the game's functions: one reads the data through Baker.get_value, as game
-# code does; one takes an optional argument.
+# code does; one takes an optional argument. And two enum properties, bound to the data.
 cat > "$work/probe.gd" <<'GD'
 extends Node
+@export_enum("light", "heavy") var attack: String = "light"
+@export_enum("Easy", "Normal", "Hard:5") var difficulty: int = 1
 func _ready() -> void:
 	Baker.bind_function("probe.value", func(path: String) -> Variant: return Baker.get_value(path, -1.0))
 	Baker.bind_function("probe.add", add)
+	var binding := BakerBinding.new()
+	binding.bindings = {"attack": "probe.attack", "difficulty": "probe.difficulty"}
+	add_child(binding)
 func add(a: float, b: float = 2.0) -> float:
 	return a + b
 GD
@@ -83,25 +89,33 @@ check $? "  a misspelled key passes check"
 json bad3.json 'd["passed"] and any("hieght" in w["message"] for w in d["tweak_warnings"])'
 check $? "    with a warning that names it"
 
-# The game's functions, from a tool command: reads see the command's data, and a call with
-# the wrong number of arguments is an error at the call.
+# The game's functions, from a tool command: reads see the command's data, and a call is held
+# to the function's parameters, as check holds the data's calls to them.
 timeout 60 "$godot" --headless --path "$work" -- --baker eval --json "{probe.value player.jump.height}" \
     "{player.hold_jump 1 2 3}" "{probe.add 1}" "{probe.add}" --out "$work/calls.txt" >/dev/null 2>&1
 "$py" - "$work/calls.txt" <<'PY'; check $? "the game's functions: get_value reads the data in a tool command; a wrong argument count is an error"
 import json, sys
 r = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
 assert r[0]["ok"] and r[0]["value"] == 96, r[0]  # not get_value's fallback, -1
-assert not r[1]["ok"] and "takes 0 argument(s), given 3" in json.dumps(r[1]), r[1]
+assert not r[1]["ok"], r[1]  # takes none
 assert r[2]["ok"] and r[2]["value"] == 3, r[2]  # the default
-assert not r[3]["ok"] and "takes 1 to 2 argument(s), given 0" in json.dumps(r[3]), r[3]
+assert not r[3]["ok"], r[3]  # needs one
 PY
-cp "$work/sim/scenarios.dta" "$work/scenarios.dta.bak"; cp "$work/sim/objectives.dta" "$work/objectives.dta.bak"
+cp "$work/sim/objectives.dta" "$work/objectives.dta.bak"
 printf '(objective probe.height (measure {probe.value player.jump.height}) (pass {== $value 96}))\n' \
     >> "$work/sim/objectives.dta"
-printf '(scenario probe (seconds 0.5) (objectives probe.height))\n' >> "$work/sim/scenarios.dta"
+printf '(scenario probe (seconds 0.5) (objectives probe.height))\n' > "$work/sim/scenarios/probe.dta"
 timeout 60 "$godot" --headless --fixed-fps 60 --path "$work" -- --baker sim --scenario probe >/dev/null 2>&1
 check $? "  and get_value reads the run's data in sim"
-mv "$work/scenarios.dta.bak" "$work/sim/scenarios.dta"; mv "$work/objectives.dta.bak" "$work/sim/objectives.dta"
+rm "$work/sim/scenarios/probe.dta"; mv "$work/objectives.dta.bak" "$work/sim/objectives.dta"
+# An enum property's choices are its tweak's allowed values: reference gives them, and check
+# holds the data to them.
+tool enums.json reference --json
+json enums.json '{t["path"]: (t["one_of"], [(c["value"], c["name"]) for c in t.get("choices", [])]) for t in d["tweaks"]["tweaks"] if t["path"].startswith("probe.")} == {"probe.attack": (["light", "heavy"], []), "probe.difficulty": ([], [(0, "Easy"), (1, "Normal"), (5, "Hard")])}'
+check $? "an enum property's choices are its tweak's: a String's one_of, an int's named choices"
+bad '(probe (attack "medium"))' enum1.json; [ $? -eq 1 ]; check $? "  a string outside them fails check"
+bad '(probe (difficulty 3))' enum2.json; [ $? -eq 1 ]; check $? "  so does an int"
+bad '(probe (attack "heavy") (difficulty 5))' enum3.json; check $? "  values among them pass"
 
 # 2.
 sim before; status=$?
@@ -115,13 +129,18 @@ check $? "  the same apex in every run: 96.06"
 tool layers.json eval --json "{config.layers}"
 json layers.json '[l["layer"] for l in d["value"]] == ["default", "agent", "floaty", "scratch"]'
 check $? "  the tool commands leave out the local layer"
-# A scenario is data: check holds its calls to the game's functions.
-cp "$work/sim/scenarios.dta" "$work/scenarios.dta.bak"
-printf '(scenario typo (seconds 1) (at 0.5 {player.hold_jmup}))\n' >> "$work/sim/scenarios.dta"
+# A scenario is data: check holds its calls to the game's functions, by name and by their
+# parameters.
+printf '(scenario typo (seconds 1) (at 0.5 {player.hold_jmup}))\n' > "$work/sim/scenarios/typo.dta"
 tool typo.json check --json; [ $? -eq 1 ]; check $? "  a scenario calling a function the game lacks fails check"
 json typo.json '[x["name"] for x in d["demand"]] == ["player.hold_jmup"]'
 check $? "    which names it"
-mv "$work/scenarios.dta.bak" "$work/sim/scenarios.dta"
+printf '(scenario args (seconds 1) (at 0.5 {player.hold_jump 1 2 3}) (at 0.6 {player.move}))\n' \
+    > "$work/sim/scenarios/typo.dta"
+tool args.json check --json; [ $? -eq 1 ]; check $? "  so does one calling a function with the wrong arguments"
+json args.json 'len(d["errors"]) == 2 and all(e["file"].endswith("typo.dta") for e in d["errors"])'
+check $? "    both calls, located"
+rm "$work/sim/scenarios/typo.dta"
 
 # 3.
 printf '(player (jump (height 200)))\n' > "$work/data/agent.dta"
@@ -139,9 +158,15 @@ compare before after after.json; check $? "  compare exits 0"
 json after.json 'd["broke"] == 0 and d["fixed"] == 1'; check $? "  one objective fixed, none broken"
 
 # 4.
-port=$("$py" -c "import socket; s=socket.socket(); s.bind(('127.0.0.1',0)); print(s.getsockname()[1])")
-"$godot" --headless --path "$work" -- --console-port "$port" >/dev/null 2>&1 &
-game=$!
+"$godot" --headless --path "$work" -- --console-port 0 > "$work/game.txt" 2>&1 &
+game=$!  # on a free port, which it prints
+port=""
+for i in $(seq 1 100); do
+    port=$(sed -n 's/^Baker: console on 127\.0\.0\.1:\([0-9]*\).*/\1/p' "$work/game.txt" | head -1)
+    [ -n "$port" ] && break
+    sleep 0.1
+done
+[ -n "$port" ]; check $? "the console takes a free port: $port"
 "$py" "$here/tests/console.py" "$port" \
     '(1 {config.explain player.jump.height})' \
     '(2 {config.toggle agent})' \

@@ -14,8 +14,9 @@
 // Types: bool, int, float, String, StringName, Vector2, Vector3, Color.
 //
 // The property's export hint is the tweak's metadata, which reference --json gives tools and
-// agents: @export_range(min, max, step) its range and step. The data's own (range ...) after
-// a value wins, as for any tweak.
+// agents, and which check holds the data to: @export_range(min, max, step) its range and step;
+// @export_enum its allowed values (a String's strings, an int's named choices). The data's
+// own (range ...) or (one_of ...) after a value wins, as for any tweak.
 //
 // Under the editor's debugger, a value set on a bound property from outside (the remote
 // inspector) becomes a live edit of its path: in scratch, unsaved, in the journal. It is

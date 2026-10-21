@@ -14,7 +14,7 @@ sample/data/tuning.dta            the game's data. Read it; never edit it.
 sample/data/agent.dta             YOUR layer, over the data. Every experiment goes here.
 sample/data/experiments/*.dta     experiment layers a person toggles (F1). Read only.
 user://baker/local.dta            one person's tuning. Never read, write, or rely on it.
-sample/sim/scenarios.dta          the scenarios: what a run does, as Baker data.
+sample/sim/scenarios/*.dta        the scenarios, one a file: what a run does, as Baker data.
 sample/sim/objectives.dta         the objectives: what "good" means. Propose a change to an
                                   objective or a scenario by pull request only, never in the
                                   same change as the data it judges.
@@ -42,7 +42,7 @@ them (`--out FILE` writes any command's output to one).
 | `$G --baker eval --json "{config.explain player.jump.height}"` | A value and every layer that sets it, with file and line; any `{config...}` command, answered as the console answers. |
 | `$G --baker diff` | Exactly what `agent.dta` changes: path, old value, new value. |
 | `$G --baker promote --patch FILE` | What promotion would write into `tuning.dta`, as a diff a person reviews and applies with `git apply -p1` from `sample/`. It writes nothing else: promotion is a person's decision. |
-| `python3 tests/console.py PORT "(1 {cmd})"` | A command in a game a person is running with `-- --console-port PORT`. Use it only when asked to. |
+| `python3 tests/console.py PORT "(1 {cmd})"` | A command in a game a person is running with `-- --console-port PORT` (`0`: a free port, which the game prints). Use it only when asked to. |
 
 `sim`, `check` and the other commands see `tuning.dta` and `agent.dta`, never `local`, so
 results do not depend on whose machine runs them. Nothing in a run reads the clock or draws a

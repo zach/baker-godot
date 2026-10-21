@@ -19,7 +19,8 @@
 // (project_writes), so that "Keep" writes a value back from the editor process.
 //
 // For tools and agents, in debug builds (the user arguments after `--`):
-//   --console-port N    Baker's loopback console, with the Config tools bound:
+//   --console-port N    Baker's loopback console, with the Config tools bound (0: a free
+//                       port, which it prints and get_console_port() gives):
 //                       {config.explain p}, {config.set p v}, {config.toggle layer}, ...
 //   --console-write     also config.write_back and config.promote
 //   --baker COMMAND...  run one of Baker's tool commands (check, reference, eval, diff,

@@ -1,5 +1,8 @@
 # 0014: Allowed values for string and integer tweaks
 
+**Shipped** in Baker 0.5.0 (`TweakMeta::one_of` for strings, `TweakMeta::choices`); a bound
+property's `@export_enum` is its tweak's allowed values.
+
 ## The need
 
 A tweak whose value is a string or an integer can carry the values it may take, as a

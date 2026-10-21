@@ -58,6 +58,16 @@ bool write_output(const std::string& path, std::string_view text) {
     return std::fclose(f) == 0 && ok;
 }
 
+bool list_files(std::string_view dir, const baker::Callback<void(std::string_view)>& file) {
+    const godot::String d = to_godot(godot_path(dir));
+    if (!godot::DirAccess::dir_exists_absolute(d)) return false;
+    const godot::PackedStringArray names = godot::DirAccess::get_files_at(d);
+    std::string base(dir);
+    if (!base.empty() && base.back() != '/') base += '/';
+    for (const godot::String& n : names) file(base + to_std(n));
+    return true;
+}
+
 bool disk_path(std::string_view path, std::string& out) {
     const std::string p = godot_path(path);
     // An export's res:// is its pack, not a directory.

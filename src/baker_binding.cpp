@@ -30,6 +30,12 @@ struct BakerBinding::Bound {
     godot::Node* target = nullptr;
     godot::StringName property;
     godot::Variant last;  // what the property was last given, or seen to hold
+    // What the tweak's metadata points at: an enum hint's allowed values, by interned names.
+    struct Allowed {
+        std::vector<std::string_view> one_of;
+        std::vector<baker::TweakChoice> choices;
+    };
+    std::unique_ptr<Allowed> allowed;
 
     void assign() {
         last = value();
@@ -82,9 +88,10 @@ std::unique_ptr<BakerBinding::Bound> make_bound(baker::Symbol path, const Varian
     }
 }
 
-// What the property's export hint says, as the tweak's metadata, for tools and agents:
-// @export_range(min, max, step) its range and step.
-baker::TweakMeta meta_of(const Dictionary& property) {
+// What the property's export hint says, as the tweak's metadata, for tools, agents and
+// check: @export_range(min, max, step) its range and step; @export_enum its allowed values,
+// a String's as one_of, an int's as named choices ("Easy,Hard:5": 0 easy, 5 hard).
+baker::TweakMeta meta_of(const Dictionary& property, BakerBinding::Bound::Allowed& allowed) {
     baker::TweakMeta meta;
     const int64_t hint = property.get("hint", 0);
     const godot::PackedStringArray parts = String(property.get("hint_string", "")).split(",");
@@ -92,6 +99,23 @@ baker::TweakMeta meta_of(const Dictionary& property) {
         parts[1].is_valid_float()) {
         meta.range = {parts[0].to_float(), parts[1].to_float()};
         if (parts.size() >= 3 && parts[2].is_valid_float()) meta.step = parts[2].to_float();
+    } else if (hint == godot::PROPERTY_HINT_ENUM) {
+        const auto type = Variant::Type(int64_t(property.get("type", 0)));
+        int64_t next = 0;
+        for (const String& part : parts) {
+            const String name = part.get_slice(":", 0).strip_edges();
+            if (name.is_empty()) continue;
+            const std::string_view interned = baker::Symbol(to_std(name)).str();  // for good
+            if (type == Variant::STRING) {
+                allowed.one_of.push_back(interned);
+            } else if (type == Variant::INT) {
+                const String value = part.get_slice(":", 1).strip_edges();
+                if (part.contains(":") && value.is_valid_int()) next = value.to_int();
+                allowed.choices.push_back({next++, interned});
+            }
+        }
+        meta.one_of = allowed.one_of;
+        meta.choices = allowed.choices;
     }
     return meta;
 }
@@ -195,7 +219,9 @@ void BakerBinding::rebind() {
                                                   " has no property ", property);
             continue;
         }
-        std::unique_ptr<Bound> b = make_bound(baker::Symbol(to_std(path)), current, meta_of(info));
+        auto allowed = std::make_unique<Bound::Allowed>();
+        std::unique_ptr<Bound> b =
+            make_bound(baker::Symbol(to_std(path)), current, meta_of(info, *allowed));
         if (!b) {
             godot::UtilityFunctions::push_warning("BakerBinding: ", property, " is a ",
                                                   Variant::get_type_name(current.get_type()),
@@ -204,6 +230,7 @@ void BakerBinding::rebind() {
         }
         b->target = target;
         b->property = property;
+        b->allowed = std::move(allowed);  // on the heap: the metadata's spans stay valid
         Bound* raw = b.get();
         // The tweak outlives no binding: it is destroyed with `b`, and with it this callback.
         const_cast<baker::TweakBase&>(raw->tweak()).on_change([raw] { raw->assign(); });

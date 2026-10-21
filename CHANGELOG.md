@@ -3,6 +3,24 @@
 Releases of Baker for Godot, newest first. Versions follow [semantic
 versioning](https://semver.org); before 1.0.0, a minor version may change the API.
 
+## Unreleased
+
+On Baker 0.5.0.
+
+- **`check` holds calls to the game's functions to their parameters.** A function bound
+  with `Baker.bind_function` is declared with its GDScript signature: its parameters'
+  types (bool, int, float, String, StringName; others take any value), the ones with
+  defaults optional. `check` catches `{player.hold_jump 1 2 3}` or `{player.move left}`
+  in a scenario before it runs, and a call is held to the same signature. A lambda's
+  parameters are counted, each any value.
+- **Enum properties carry their choices.** A bound property's `@export_enum` is its
+  tweak's allowed values (a String's strings, an int's named choices), which
+  `reference --json` gives and `check` holds the data to.
+- **Scenario directories, in exports too.** The project file may name a directory of
+  scenarios or objectives, listed through Godot's file access, so an exported game finds
+  them in its package. The sample keeps one scenario a file in `sim/scenarios/`.
+- **`--console-port 0`** serves the console on a free port, which the game prints.
+
 ## 0.1.0 - 2026-10-21
 
 The first release: Baker's layered tuning data in a Godot 4.5 game, its editor, its tools

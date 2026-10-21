@@ -1,7 +1,7 @@
 ## The sample level: a floor, some platforms, the player, and a line of help.
 ##
 ## F1 toggles the `floaty` experiment layer while playing. Run with `-- --baker sim` to run
-## the scenarios in sim/scenarios.dta instead of playing: each run reloads this scene, which
+## the scenarios in sim/scenarios/ instead of playing: each run reloads this scene, which
 ## tells Baker when it is set up.
 extends Node2D
 
