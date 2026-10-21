@@ -61,9 +61,11 @@ public:
     // The runtime in the scene tree, or null.
     [[nodiscard]] static BakerRuntime* get_singleton() noexcept { return singleton_; }
     // Null until the project is open.
+    // Null until the project is open, and while a tool command or sim runs, which owns its
+    // own Config: reads go to that one (the const overload), edits are refused.
     [[nodiscard]] baker::Config* config() noexcept { return live_ ? &live_->config() : nullptr; }
     [[nodiscard]] const baker::Config* config() const noexcept {
-        return live_ ? &live_->config() : nullptr;
+        return live_ ? &live_->config() : tool_config_;
     }
 
     void _enter_tree() override;
@@ -123,9 +125,10 @@ public:
     // are bound only with --console-write.
     godot::String eval_request(const godot::String& line);
     // Binds `function` as Baker's script function `name`: {name arg...} calls it with the
-    // arguments as Godot values, and its result is the call's value (nil gives 0). Bound in
-    // the console's Context now, and in every tool command's. Binding a name again replaces
-    // the function, so a scene that is reloaded binds its own.
+    // arguments as Godot values, and its result is the call's value (nil gives 0). A call
+    // with more arguments than it takes, or fewer than it needs without its defaults, is an
+    // error at the call. Bound in the console's Context now, and in every tool command's.
+    // Binding a name again replaces the function, so a scene that is reloaded binds its own.
     void bind_function(const godot::String& name, const godot::Callable& function);
     // Under --baker sim: whether a run is in progress, and, from the scene the run reloaded,
     // that it is set up and the run may step.
@@ -194,10 +197,11 @@ private:
     std::string tool_project_;            // the project file, as the commands open it
     std::string tool_output_;             // what the command wrote
     baker::host::CommandHooks tool_hooks_;
-    std::unique_ptr<baker::host::SimRun> sim_;  // --baker sim, in progress
-    bool sim_reloading_ = false;                // the scene is being reset for the next run
-    godot::Dictionary functions_;               // bind_function: name -> Callable
-    std::string tool_out_;                      // --out FILE
+    const baker::Config* tool_config_ = nullptr;  // the command's, once it has loaded
+    std::unique_ptr<baker::host::SimRun> sim_;    // --baker sim, in progress
+    bool sim_reloading_ = false;                  // the scene is being reset for the next run
+    godot::Dictionary functions_;                 // bind_function: name -> Callable
+    std::string tool_out_;                        // --out FILE
     int tool_frames_ = 0;
     int console_port_ = -1;  // --console-port N; -1: none
     bool console_write_ = false;

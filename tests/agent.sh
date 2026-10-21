@@ -22,6 +22,17 @@ trap 'kill "$game" 2>/dev/null; rm -rf "$work"' EXIT
 game=""
 cp -r "$here/sample/." "$work/"
 rm -rf "$work/.godot" "$work/data/agent.dta"
+# A probe, for the game's functions: one reads the data through Baker.get_value, as game
+# code does; one takes an optional argument.
+cat > "$work/probe.gd" <<'GD'
+extends Node
+func _ready() -> void:
+	Baker.bind_function("probe.value", func(path: String) -> Variant: return Baker.get_value(path, -1.0))
+	Baker.bind_function("probe.add", add)
+func add(a: float, b: float = 2.0) -> float:
+	return a + b
+GD
+sed -i.bak 's|^Baker="\*res://addons/baker/baker.gd"$|&\nProbe="*res://probe.gd"|' "$work/project.godot"
 "$godot" --headless --path "$work" --import >/dev/null 2>&1 || true
 "$godot" --headless --path "$work" --import >/dev/null 2>&1
 
@@ -71,6 +82,26 @@ bad '(player (jump (hieght 120)))' bad3.json; [ $? -eq 0 ]
 check $? "  a misspelled key passes check"
 json bad3.json 'd["passed"] and any("hieght" in w["message"] for w in d["tweak_warnings"])'
 check $? "    with a warning that names it"
+
+# The game's functions, from a tool command: reads see the command's data, and a call with
+# the wrong number of arguments is an error at the call.
+timeout 60 "$godot" --headless --path "$work" -- --baker eval --json "{probe.value player.jump.height}" \
+    "{player.hold_jump 1 2 3}" "{probe.add 1}" "{probe.add}" --out "$work/calls.txt" >/dev/null 2>&1
+"$py" - "$work/calls.txt" <<'PY'; check $? "the game's functions: get_value reads the data in a tool command; a wrong argument count is an error"
+import json, sys
+r = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
+assert r[0]["ok"] and r[0]["value"] == 96, r[0]  # not get_value's fallback, -1
+assert not r[1]["ok"] and "takes 0 argument(s), given 3" in json.dumps(r[1]), r[1]
+assert r[2]["ok"] and r[2]["value"] == 3, r[2]  # the default
+assert not r[3]["ok"] and "takes 1 to 2 argument(s), given 0" in json.dumps(r[3]), r[3]
+PY
+cp "$work/sim/scenarios.dta" "$work/scenarios.dta.bak"; cp "$work/sim/objectives.dta" "$work/objectives.dta.bak"
+printf '(objective probe.height (measure {probe.value player.jump.height}) (pass {== $value 96}))\n' \
+    >> "$work/sim/objectives.dta"
+printf '(scenario probe (seconds 0.5) (objectives probe.height))\n' >> "$work/sim/scenarios.dta"
+timeout 60 "$godot" --headless --fixed-fps 60 --path "$work" -- --baker sim --scenario probe >/dev/null 2>&1
+check $? "  and get_value reads the run's data in sim"
+mv "$work/scenarios.dta.bak" "$work/sim/scenarios.dta"; mv "$work/objectives.dta.bak" "$work/sim/objectives.dta"
 
 # 2.
 sim before; status=$?

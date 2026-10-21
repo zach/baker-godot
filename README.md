@@ -106,7 +106,9 @@ carry over.
   keeps the values from the editor.
 - **The game's functions in Baker's script.** `Baker.bind_function("player.apex", apex)` makes
   a GDScript function `{player.apex}`: scenarios, objectives, `eval` and the console call it,
-  and `check` knows it. Binding a name again replaces it, so a reloaded scene binds its own.
+  and `check` knows it. A call with the wrong number of arguments is an error at the call.
+  Binding a name again replaces it, so a reloaded scene binds its own. While a tool command
+  or `sim` runs, the game's reads (`Baker.get_value`, `explain`, ...) see that command's data.
 - **The running game's console** (Baker's), on 127.0.0.1 only: `-- --console-port 7000`. A line
   `(1 {config.toggle agent})` is answered with one line of `baker.reply/1.1` JSON. Baker's
   Config tools are bound (`config.explain`, `config.set`, `config.toggle`,

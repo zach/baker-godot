@@ -20,6 +20,7 @@
 #include <godot_cpp/variant/callable_method_pointer.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -334,6 +335,11 @@ void BakerRuntime::run_tool_command() {
     tool_hooks_.reader = reader();
     tool_hooks_.output = [this](std::string_view text) { tool_output_.append(text); };
     tool_hooks_.bind = [this](baker::Context& ctx) { bind_functions(ctx); };
+    // The game's own reads (get_value, explain, ...) see the command's data, as it loads.
+    tool_hooks_.changed = [this](const baker::Config& cfg) {
+        tool_config_ = &cfg;
+        cache_.clear();
+    };
     if (skip_local_) (void)tool_hooks_.open.skip.add("local");
     // The commands open a Config of their own, which binds the tweak registry, the bound
     // properties' among them: close this one first.
@@ -349,6 +355,7 @@ void BakerRuntime::run_tool_command() {
         return;
     }
     int status = baker::host::run_command(*line, tool_hooks_);
+    tool_config_ = nullptr;  // gone with the command
     if (status < 0) {
         std::fprintf(stderr, "baker: no command '%s'\n%s", tool_argv_[1],
                      std::string(baker::host::command_help()).c_str());
@@ -382,6 +389,7 @@ void BakerRuntime::_physics_process(double) {
         case baker::host::SimRun::Wants::Done: {
             const int status = sim_->status();
             sim_.reset();
+            tool_config_ = nullptr;
             set_physics_process(false);
             finish_tool(status);
             break;
@@ -407,8 +415,30 @@ void BakerRuntime::bind_functions(baker::Context& ctx) {
         bind_into(ctx, baker::Symbol(to_std(String(names[i]))));
 }
 
+namespace {
+
+// How many arguments `f` takes: at most its parameters, at least those without a default.
+// The defaults are known for an object's method; a lambda must be given all of them.
+void arity(const godot::Callable& f, int64_t& least, int64_t& most) {
+    most = f.get_argument_count();
+    least = most;
+    const godot::Object* object = f.get_object();
+    if (!object || f.is_custom()) return;
+    const godot::StringName method = f.get_method();
+    const Array methods = object->get_method_list();
+    for (int64_t i = 0; i < methods.size(); ++i) {
+        const Dictionary m = methods[i];
+        if (godot::StringName(m.get("name", "")) != method) continue;
+        least = std::max<int64_t>(0, most - Array(m.get("default_args", Array())).size());
+        return;
+    }
+}
+
+}  // namespace
+
 // {name arg...}: the arguments evaluated, as Godot values, to the function bound under the
-// name now (a reloaded scene binds its own).
+// name now (a reloaded scene binds its own). A call with more arguments than the function
+// takes, or fewer than it needs, is an error at the call.
 void BakerRuntime::bind_into(baker::Context& ctx, baker::Symbol name) {
     if (ctx.has_func(name)) return;
     auto r = ctx.func(name, [this, name](baker::Args a) -> baker::Expected<baker::Node> {
@@ -416,6 +446,15 @@ void BakerRuntime::bind_into(baker::Context& ctx, baker::Symbol name) {
         const godot::Callable f = functions_.get(key, godot::Callable());
         if (!f.is_valid())
             return baker::Unexpected(a.error("its function is gone", baker::ErrorCode::NotFound));
+        int64_t least = 0, most = 0;
+        arity(f, least, most);
+        const auto given = int64_t(a.size());
+        if (given < least || given > most)
+            return baker::Unexpected(
+                a.error("takes " +
+                        (least == most ? std::to_string(most)
+                                       : std::to_string(least) + " to " + std::to_string(most)) +
+                        " argument(s), given " + std::to_string(given)));
         Array args;
         for (size_t i = 0; i < a.size(); ++i) {
             auto v = a.eval(i);
