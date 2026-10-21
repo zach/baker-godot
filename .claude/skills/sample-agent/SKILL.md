@@ -31,7 +31,9 @@ game's frames as fast as it can, each 1/60 s of game time, so `sim` gives the sa
 in a fraction of the time). Godot runs the game in `sample/`, so a
 relative path you give (`--results runs/before`, `compare`'s directories, `--out`, `--patch`)
 is under `sample/`. Its banner comes first on stdout: read results from a file when you parse
-them (`--out FILE` writes any command's output to one).
+them (`--out runs/NAME` writes any command's output to one). Keep every file you write, other
+than `data/agent.dta`, under `runs/`, which version control ignores: a stray file elsewhere
+in the project is a change a person has to clean up.
 
 | Command | What it tells you |
 |---|---|

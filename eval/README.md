@@ -18,6 +18,13 @@ run on average instead of about 31, for $0.95. Its rows are not in `results.csv`
 Baker's `sim` and `compare`, with `--results` and `--before`/`--after`), same protocol: 9 of
 9, in 3 to 5 tool calls (3.7 on average), 17 s a run, for $1.12. Not in `results.csv`.
 
+**Rerun on Baker 0.5.0** (fb97833), same protocol: first 8 of 9. The run that failed had the
+right data (check, sim and the task's condition passed) but left `sample/ref.json`, a
+`reference --json --out ref.json` it parsed, so the project was not as planted. The skill
+said to read results from a file and not where to put it; it now says to keep every file
+an agent writes under `runs/`. Rerun with that: 9 of 9, 3 tool calls each, 19 s a run, for
+$0.75. Neither run's rows are in `results.csv`.
+
 ## Protocol
 
 - **Tasks** (`harness.py`): three, each a person's complaint over a fresh copy of the
