@@ -47,6 +47,12 @@ the remote inspector sends, and checks the diff.
 
   `property_changed(property)` follows each assignment from the data, for state the node
   derives from it (current hit points from the maximum).
+
+  **A bound property is a tunable, not game state.** Under the editor's debugger, a bound
+  property whose value changes from outside is taken for a person tuning it, and becomes a
+  live edit. So game code must not write to a bound property at runtime: keep modifiers
+  (a buff, a level bonus, damage taken) in properties of their own, beside the exported
+  value they modify.
 - **Tables, read whole.** With a Dictionary fallback, `Baker.get_value("units", {})` is a
   keyed table as a Dictionary of records, `{"tank": {"hp": 10, "price": 50, ...}, ...}`; with
   an Array fallback, a list of records with one tag is an Array of them
