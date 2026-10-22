@@ -1,0 +1,35 @@
+; The skirmish's tables (sample/skirmish/): what each unit and building is. A keyed table
+; merges by name, so a layer above retunes one record, or one field of it, and a content
+; pack adds records. Flags are 0 or 1. A field is never named range, step, desc, note, kind,
+; group or one_of: after a value, those are its metadata.
+
+(units
+   (infantry  (hp 10) (move 4) (attack 6)  (armor 0) (price 25) (captures 1))
+   (tank      (hp 10) (move 6) (attack 10) (armor 2) (price 50))
+   (artillery (hp 8)  (move 3) (attack 12) (armor 1) (price 60) (reach 2 3))
+   (heli      (hp 10) (move 7) (attack 8)  (armor 1) (price 70) (flies 1)))
+
+(buildings
+   (hq       (income 20) (capture 1000))
+   (barracks (income 5)  (capture 70))
+   (tower    (income 15) (capture 50)))
+
+; The AI's opening: what it builds first, in order.
+(ai
+   (opening (build infantry) (build infantry) (build tank)))
+
+; What a record must hold: check reports a field of the wrong type or out of range, or a
+; required one missing, as an error, and a field no shape declares as a warning.
+(shapes
+   (unit (at units) (keyed)
+      (hp       int (range 1 50) (desc "Hit points"))
+      (move     int (range 1 10) (desc "Tiles a turn"))
+      (attack   int (range 0 30))
+      (armor    int (range 0 10) (desc "Taken off each hit"))
+      (price    int (range 0 500) (desc "Action points to build one"))
+      (captures int (range 0 1) (optional))
+      (flies    int (range 0 1) (optional))
+      (reach    (list int) (optional) (desc "Nearest and farthest tiles it attacks")))
+   (building (at buildings) (keyed)
+      (income   int (range 0 100) (desc "Action points a turn"))
+      (capture  int (range 1 2000) (desc "Points to take it"))))

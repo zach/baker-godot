@@ -90,10 +90,22 @@ struct RawValues {
 // One node as a Variant: numbers, symbols (as StringName), strings, arrays (as Array).
 [[nodiscard]] godot::Variant to_variant(const baker::Node& node);
 // `values` read as `type`, if they convert; nil otherwise. NIL: any type, by the values:
-// one node is its own value, several are an Array.
+// one node is its own value, several are an Array. DICTIONARY and ARRAY read as to_table
+// does: a table, or a list (of values, or of records; one value is a list of one).
 [[nodiscard]] godot::Variant to_variant(const baker::Values& values, godot::Variant::Type type);
+// `values` read as a table, for code that reads a record or a table of them whole:
+//
+//   (units (infantry (hp 10) (attack 6)) (tank (hp 10) (attack 10 (range 0 20))))
+//   at "units": {"infantry": {"hp": 10, "attack": 6}, "tank": {"hp": 10, "attack": 10}}
+//
+// Arrays each tagged by a symbol, the tags all different, are a Dictionary by tag (String
+// keys); one value is itself; several are an Array, in which arrays that share one tag are
+// records ((wave (n 3)) (wave (n 5)): [{"n": 3}, {"n": 5}]). Metadata after a value, such as
+// (range ...), is left out, as a tweak leaves it.
+[[nodiscard]] godot::Variant to_table(const baker::Values& values);
 // `value` as data: false for a type data cannot hold. An Array is a value of several
-// nodes, each a scalar.
+// nodes; a Dictionary is a table, each entry an array tagged by its key, the reverse of
+// to_table (an Array of Dictionaries writes each as an untagged array of its entries).
 [[nodiscard]] bool to_values(const godot::Variant& value, baker::ValueList& out);
 
 [[nodiscard]] godot::String to_godot(std::string_view text);

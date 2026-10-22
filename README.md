@@ -47,6 +47,14 @@ the remote inspector sends, and checks the diff.
 
   `property_changed(property)` follows each assignment from the data, for state the node
   derives from it (current hit points from the maximum).
+- **Tables, read whole.** With a Dictionary fallback, `Baker.get_value("units", {})` is a
+  keyed table as a Dictionary of records, `{"tank": {"hp": 10, "price": 50, ...}, ...}`; with
+  an Array fallback, a list of records with one tag is an Array of them
+  (`(opening (build infantry) (build tank))` at `ai.opening` is `[&"infantry", &"tank"]`).
+  Metadata after a value is left out, so a field is never named `range`, `step`, `desc`,
+  `note`, `kind`, `group` or `one_of`. Shapes in the data hold the tables to their fields
+  (`sample/data/skirmish.dta`). `set_value("units.tank", {"price": 45})` sets each field it
+  names as a live edit of its own, and a table read sees them.
 - **The editor plugin** (`addons/baker/plugin.cfg`):
   - a dock with **Layers** (toggle each, in the running game too; hover to see what a
     layer changes), **Tweaks** (the edited scene's bound properties, their values and the

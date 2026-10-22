@@ -100,7 +100,9 @@ public:
     [[nodiscard]] godot::Array explain(const godot::String& path) const;
 
     // --- Live edits and the journal. ---
-    // Sets the value in the scratch layer, unsaved; bound properties follow.
+    // Sets the value in the scratch layer, unsaved; bound properties follow. A Dictionary
+    // sets each field it names, each a live edit of its own path, so a record's other fields
+    // stay: set_value("units.tank", {"price": 45}).
     godot::Error set_value(const godot::String& path, const godot::Variant& value);
     godot::Error clear_scratch(const godot::String& path);
     [[nodiscard]] godot::PackedStringArray unsaved() const;
@@ -168,6 +170,8 @@ private:
     godot::Error fail(const baker::Error& error);
     void present();
     godot::Error wrote(const baker::WriteReport& report);
+    [[nodiscard]] godot::Variant with_live_edits(const godot::String& path,
+                                                 const godot::Variant& table) const;
     void read_arguments();
     std::string answer(const std::string& line);
     void run_tool_command();

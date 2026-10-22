@@ -27,6 +27,13 @@ On Baker 0.5.0.
   drops the path.
 - **Paths keyed by the node:** `"units.{kind}.max_hp"` reads the node's `kind` as it binds.
 - **`BakerBinding.property_changed(property)`** follows each assignment from the data.
+- **Tables, read whole.** `get_value(path, {})` reads a keyed table as a Dictionary of
+  records (String keys), and `get_value(path, [])` a list of one-tag records as an Array of
+  them; metadata after a value is left out. `set_value(path, Dictionary)` sets each field
+  it names as its own live edit, and a table read includes the live edits beneath it.
+- **The skirmish's tables:** units, buildings and the AI's opening in
+  `sample/data/skirmish.dta`, held to their shapes by `check`, and read whole by
+  `sample/skirmish/catalog.gd`, the start of the phase 2 sample.
 
 ## 0.1.0 - 2026-10-21
 

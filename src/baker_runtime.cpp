@@ -582,9 +582,36 @@ Variant BakerRuntime::get_value(const String& path, const Variant& fallback) con
         godot::UtilityFunctions::push_warning("Baker: ", to_godot(baker::to_string(r.error())));
         return fallback;
     }
-    if (r->nodes.empty()) return fallback;
-    const Variant v = to_variant(r->values(), fallback.get_type());
+    const bool table = fallback.get_type() == Variant::DICTIONARY;
+    Variant v = r->nodes.empty() ? Variant() : to_variant(r->values(), fallback.get_type());
+    if (table) v = with_live_edits(path, v);
     return v.get_type() == Variant::NIL ? fallback : v;
+}
+
+// A table read with the live edits beneath its path laid over it: a live edit updates only
+// its own path until the stack next merges, so a read of a record would miss its tuned
+// fields (requirement 0019).
+Variant BakerRuntime::with_live_edits(const String& path, const Variant& table) const {
+    const String prefix = path.replace(".", "/") + "/";
+    Dictionary out =
+        table.get_type() == Variant::DICTIONARY ? Dictionary(table).duplicate(true) : Dictionary();
+    bool edited = false;
+    for (baker::Symbol edit : config()->unsaved()) {
+        const String at = name_of(edit);
+        if (!at.begins_with(prefix)) continue;
+        auto r = config()->get<RawValues>(baker::Path(to_std(at)), RawValues{});
+        if (!r || r->nodes.empty()) continue;
+        const godot::PackedStringArray keys = at.substr(prefix.length()).split("/");
+        Dictionary level = out;
+        for (int64_t k = 0; k + 1 < keys.size(); ++k) {
+            if (level.get(keys[k], Variant()).get_type() != Variant::DICTIONARY)
+                level[keys[k]] = Dictionary();
+            level = level[keys[k]];
+        }
+        level[keys[keys.size() - 1]] = to_table(r->values());
+        edited = true;
+    }
+    return edited ? Variant(out) : table;
 }
 
 Variant BakerRuntime::tweak(const String& path, const Variant& fallback) {
@@ -619,6 +646,17 @@ Array BakerRuntime::explain(const String& path) const {
 
 godot::Error BakerRuntime::set_value(const String& path, const Variant& value) {
     if (!config()) return godot::ERR_UNCONFIGURED;
+    if (value.get_type() == Variant::DICTIONARY) {
+        // Each field it names, as its own live edit: the record's other fields stay.
+        const Dictionary fields = value;
+        const Array keys = fields.keys();
+        for (int64_t i = 0; i < keys.size(); ++i)
+            if (const godot::Error e =
+                    set_value(path + String(".") + String(keys[i]), fields[keys[i]]);
+                e != godot::OK)
+                return e;
+        return keys.is_empty() ? godot::ERR_INVALID_PARAMETER : godot::OK;
+    }
     baker::ValueList values;
     if (!to_values(value, values)) {
         last_error_ =

@@ -140,6 +140,35 @@ func run() -> void:
 	check(player.run_speed == 220.0, "discarded, the property returns to the data's value")
 	check(binding.capture() == 0, "which is not taken for an edit")
 
+	# Tables, read whole: a keyed table is a Dictionary of records, and a list of records
+	# an Array.
+	var units_table: Dictionary = Baker.get_value("units", {})
+	var kinds := units_table.keys()
+	kinds.sort()
+	check(kinds == ["artillery", "heli", "infantry", "tank"],
+		"get_value(\"units\", {}) is the unit table, by kind: %s" % [kinds])
+	check(units_table["tank"] == {"hp": 10, "move": 6, "attack": 10, "armor": 2, "price": 50},
+		"a record is a Dictionary of its fields: %s" % [units_table["tank"]])
+	check(units_table["artillery"]["reach"] == [2, 3] and units_table["heli"]["flies"] == 1,
+		"a field of several values is an Array, a flag a number")
+	check(Baker.get_value("buildings.hq", {}) == {"income": 20, "capture": 1000},
+		"one record by its path")
+	check(SkirmishCatalog.opening() == [&"infantry", &"infantry", &"tank"],
+		"a list of records, all of one tag, is an Array of them: %s" % [SkirmishCatalog.opening()])
+	check(SkirmishCatalog.affordable(50) == ["infantry", "tank"],
+		"the production menu reads the table whole: %s" % [SkirmishCatalog.affordable(50)])
+	check(Baker.get_value("units.tank.hp", {}) == {}, "a value that is not a table gives the fallback")
+	check(Baker.set_value("units.tank", {"price": 45}) == OK
+		and Baker.get_value("units.tank", {}) == {"hp": 10, "move": 6, "attack": 10, "armor": 2, "price": 45},
+		"a Dictionary set live sets the fields it names, and the record keeps the rest: %s"
+			% [Baker.get_value("units.tank", {})])
+	check(Baker.unsaved() == PackedStringArray(["units/tank/price"]),
+		"each field a live edit of its own: %s" % [Baker.unsaved()])
+	check(Baker.set_value("probe.rec", {"a": [10, [&"range", 0, 20]], "b": {"c": 1}}) == OK
+		and Baker.get_value("probe.rec", {}) == {"a": 10, "b": {"c": 1}},
+		"metadata after a value is left out: %s" % [Baker.get_value("probe.rec", {})])
+	Baker.clear_scratch()
+
 	# Bindings at scale: forty scouts and twenty tanks, one binding each through the path
 	# units.{kind}.max_hp, make two tweaks, and an edit of a kind reaches every unit of it.
 	var tweaks_before := BakerBinding.shared_tweak_count()

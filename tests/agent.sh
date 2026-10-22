@@ -89,6 +89,18 @@ check $? "  a misspelled key passes check"
 json bad3.json 'd["passed"] and any("hieght" in w["message"] for w in d["tweak_warnings"])'
 check $? "    with a warning that names it"
 
+# The skirmish's tables are held to their shapes: a record with a field of the wrong type,
+# out of range, or missing fails check; a field no shape declares is a warning.
+bad '(units (tank (hp "ten")))' shape1.json; [ $? -eq 1 ]; check $? "a unit's field of the wrong type fails check"
+json shape1.json '[(e["file"], e["line"]) for e in d["shape_errors"]] == [("data/agent.dta", 1)]'
+check $? "  located in agent.dta"
+bad '(units (tank (hp 99)))' shape2.json; [ $? -eq 1 ]; check $? "  so does one out of its range"
+bad '(units (scout (hp 5)))' shape3.json; [ $? -eq 1 ]; check $? "  and a new unit missing its required fields"
+bad '(units (tank (attak 12)))' shape4.json; [ $? -eq 0 ]; check $? "  a field no shape declares passes"
+json shape4.json 'any("attak" in w["message"] for w in d["shape_warnings"])'; check $? "    with a warning that names it"
+bad '(units (scout (hp 6) (move 8) (attack 4) (armor 0) (price 30)))' shape5.json
+check $? "  a whole new record passes"
+
 # The game's functions, from a tool command: reads see the command's data, and a call is held
 # to the function's parameters, as check holds the data's calls to them.
 timeout 60 "$godot" --headless --path "$work" -- --baker eval --json "{probe.value player.jump.height}" \
