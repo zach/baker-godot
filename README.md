@@ -71,6 +71,8 @@ the remote inspector sends, and checks the diff.
   `sample/skirmish/peer.gd` is a match's first exchange between two processes, and
   `tests/lockstep.sh` runs it: peers on the same data agree; a peer with an extra layer is
   refused.
+- **Text a player reads stays in Godot's translation system.** Data names it by its
+  translation key (`(name CARD_FIREBALL)`), and the game passes the key to `tr()`.
 - **Tables, read whole.** With a Dictionary fallback, `Baker.get_value("units", {})` is a
   keyed table as a Dictionary of records, `{"tank": {"hp": 10, "price": 50, ...}, ...}`; with
   an Array fallback, a list of records with one tag is an Array of them

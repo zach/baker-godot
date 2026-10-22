@@ -29,13 +29,16 @@ jobs:
             zip: Godot_v4.5.1-stable_win64.exe.zip
             template: windows_release_x86_64.exe
             preset: Windows
-          # macOS on Apple silicon: every suite but the export, which would need the macOS
-          # template and a signing setup of its own.
+          # macOS on Apple silicon: every suite but two. The export would need the macOS
+          # template and a signing setup of its own. The demonstration's headless editor
+          # cannot start the game on the runner (EditorRun::run fails, editor_run.cpp:178),
+          # though the game started directly runs every other suite there.
           - os: macos-14
             godot: Godot.app/Contents/MacOS/Godot
             zip: Godot_v4.5.1-stable_macos.universal.zip
             template: ""
             preset: ""
+            no_editor_play: true
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -77,7 +80,7 @@ jobs:
         timeout-minutes: 2
         run: godot/${{ matrix.godot }} --headless --fixed-fps 60 --path sample -- --baker sim --scenario jump
       - name: The demonstration, in a headless editor
-        if: ${{ !cancelled() && steps.import.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.import.outcome == 'success' && !matrix.no_editor_play }}
         timeout-minutes: 5
         run: tests/e2e.sh "$PWD/godot/${{ matrix.godot }}"
       - name: An agent's loop, through the tool commands and the console
