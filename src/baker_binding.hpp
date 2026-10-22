@@ -1,6 +1,6 @@
 #pragma once
 
-// BakerBinding: binds properties of its parent to paths in the data.
+// BakerBinding: binds properties of its parent, or of a Resource, to paths in the data.
 //
 //   Player (CharacterBody2D, player.gd: @export var jump_height := 96.0)
 //   └─ BakerBinding   bindings = {"jump_height": "player.jump.height"}
@@ -52,6 +52,11 @@ public:
     void _process(double delta) override;
 
     void set_bindings(const godot::Dictionary& bindings);
+    // What the bindings bind: the parent node, unless a target is set (a Resource, whose
+    // properties are bound as a node's are; Baker.bind_resource sets it). Kept alive while
+    // it is the target.
+    void set_target(godot::Object* target);
+    [[nodiscard]] godot::Object* get_target() const;
     [[nodiscard]] godot::Dictionary get_bindings() const { return bindings_; }
     // {property: {path, bound, layer, file, line}}: where each property's value comes from.
     [[nodiscard]] godot::Dictionary sources() const;
@@ -73,10 +78,12 @@ protected:
 
 private:
     void unbind();
+    [[nodiscard]] godot::Object* bound_target() const;
 
     static constexpr double kCaptureInterval = 0.1;  // seconds
 
     godot::Dictionary bindings_;  // property -> path
+    godot::Variant target_;       // set_target's, or nil: the parent
     std::vector<std::unique_ptr<Use>> uses_;
     double since_capture_ = 0;
     static std::vector<BakerBinding*> live_;  // the bindings with bound properties

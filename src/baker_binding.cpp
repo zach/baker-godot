@@ -27,7 +27,7 @@ using godot::Variant;
 // One bound property of one node: where a path's value goes.
 struct BakerBinding::Use {
     BakerBinding* binding = nullptr;
-    godot::Node* target = nullptr;
+    godot::Object* target = nullptr;
     godot::StringName property;
     godot::Variant last;   // what the property was last given, or seen to hold
     godot::Variant scene;  // its own value from the scene, while the data lacks the path
@@ -130,9 +130,15 @@ baker::TweakMeta meta_of(const Dictionary& property, Allowed& allowed) {
     return meta;
 }
 
+// What a warning calls the bound object: a node's name, else the object's own text.
+String name_of(godot::Object& o) {
+    if (const auto* n = godot::Object::cast_to<godot::Node>(&o)) return n->get_name();
+    return o.to_string();
+}
+
 // "units.{kind}.hp" with the node's `kind` in place of {kind}; empty, and `error` set, if
 // the node has no such property or it is empty.
-String resolve(const String& path, const godot::Node& target, String& error) {
+String resolve(const String& path, godot::Object& target, String& error) {
     String out;
     int64_t at = 0;
     while (at < path.length()) {
@@ -151,7 +157,7 @@ String resolve(const String& path, const godot::Node& target, String& error) {
         const Variant v = target.get(key);
         const String text = v.get_type() == Variant::NIL ? String() : String(v);
         if (text.is_empty()) {
-            error = String(target.get_name()) + " has no " + String(key) + " for " + path;
+            error = name_of(target) + " has no " + String(key) + " for " + path;
             return {};
         }
         out += text;
@@ -192,6 +198,8 @@ void BakerBinding::_bind_methods() {
     using godot::D_METHOD;
     ClassDB::bind_method(D_METHOD("set_bindings", "bindings"), &BakerBinding::set_bindings);
     ClassDB::bind_method(D_METHOD("get_bindings"), &BakerBinding::get_bindings);
+    ClassDB::bind_method(D_METHOD("set_target", "target"), &BakerBinding::set_target);
+    ClassDB::bind_method(D_METHOD("get_target"), &BakerBinding::get_target);
     ClassDB::bind_method(D_METHOD("sources"), &BakerBinding::sources);
     ClassDB::bind_method(D_METHOD("rebind"), &BakerBinding::rebind);
     ClassDB::bind_method(D_METHOD("capture"), &BakerBinding::capture);
@@ -203,6 +211,20 @@ void BakerBinding::_bind_methods() {
     // After the data assigns a bound property: a reload, a toggle, a live edit.
     ADD_SIGNAL(godot::MethodInfo("property_changed",
                                  godot::PropertyInfo(Variant::STRING_NAME, "property")));
+}
+
+godot::Object* BakerBinding::bound_target() const {
+    if (target_.get_type() == Variant::OBJECT) return target_;  // a Resource, say
+    return get_parent();
+}
+
+void BakerBinding::set_target(godot::Object* target) {
+    target_ = target ? Variant(target) : Variant();  // a Ref, so a Resource stays alive
+    if (is_node_ready()) rebind();
+}
+
+godot::Object* BakerBinding::get_target() const {
+    return bound_target();
 }
 
 void BakerBinding::set_bindings(const Dictionary& bindings) {
@@ -249,7 +271,8 @@ Array BakerBinding::all_bindings() {
         for (const std::unique_ptr<Use>& u : binding->uses_) {
             Dictionary d;
             d["object_id"] = int64_t(u->target->get_instance_id());
-            d["node"] = String(u->target->get_path());
+            const auto* node = godot::Object::cast_to<godot::Node>(u->target);
+            d["node"] = node ? String(node->get_path()) : String();
             d["property"] = u->property;
             d["path"] = to_godot(u->shared->tweaked->tweak().path());
             out.push_back(d);
@@ -278,7 +301,7 @@ void BakerBinding::unbind() {
 
 void BakerBinding::rebind() {
     unbind();
-    godot::Node* target = get_parent();
+    godot::Object* target = bound_target();
     if (!target) return;
     Dictionary infos;  // property -> its info, from one walk of the list
     for (const Variant& p : target->get_property_list()) {
@@ -289,7 +312,7 @@ void BakerBinding::rebind() {
     for (int64_t i = 0; i < properties.size(); ++i) {
         const godot::StringName property = properties[i];
         if (!infos.has(property)) {
-            godot::UtilityFunctions::push_warning("BakerBinding: ", target->get_name(),
+            godot::UtilityFunctions::push_warning("BakerBinding: ", name_of(*target),
                                                   " has no property ", property);
             continue;
         }
@@ -299,7 +322,14 @@ void BakerBinding::rebind() {
             godot::UtilityFunctions::push_warning("BakerBinding: ", error);
             continue;
         }
-        const Variant current = target->get(property);
+        // A property that holds nothing yet (a shader parameter left at the shader's
+        // default) is bound as the type it declares, from that type's zero; nil stays its
+        // own value, so dropping the path gives the shader's default back.
+        const Variant held = target->get(property);
+        const auto declared = Variant::Type(int64_t(Dictionary(infos[property]).get("type", 0)));
+        const Variant current = held.get_type() == Variant::NIL && declared != Variant::NIL
+                                    ? godot::UtilityFunctions::type_convert(Variant(), declared)
+                                    : held;
         const std::string key = to_std(path);
         std::unique_ptr<Shared>& slot = shared_tweaks()[key];
         if (!slot) {
@@ -326,7 +356,7 @@ void BakerBinding::rebind() {
             slot = std::move(s);
         } else if (slot->type != current.get_type()) {
             godot::UtilityFunctions::push_warning(
-                "BakerBinding: ", target->get_name(), ".", property, " is a ",
+                "BakerBinding: ", name_of(*target), ".", property, " is a ",
                 Variant::get_type_name(current.get_type()), ", but ", path, " is bound as a ",
                 Variant::get_type_name(slot->type));
             continue;
@@ -336,13 +366,13 @@ void BakerBinding::rebind() {
         u->target = target;
         u->property = property;
         u->shared = slot.get();
-        u->scene = current;
+        u->scene = held;
         slot->uses.push_back(u.get());
         // The data's value if it has one; the scene's own until then.
         if (slot->tweaked->tweak().bound())
             u->assign(slot->tweaked->value());
         else
-            u->last = current;
+            u->last = held;
         uses_.push_back(std::move(u));
     }
     if (!uses_.empty()) live_.push_back(this);

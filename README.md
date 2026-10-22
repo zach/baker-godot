@@ -53,6 +53,14 @@ the remote inspector sends, and checks the diff.
   live edit. So game code must not write to a bound property at runtime: keep modifiers
   (a buff, a level bonus, damage taken) in properties of their own, beside the exported
   value they modify.
+- **Layers the game finds after it starts.** `Baker.push_layer("dlc1", path, {"below":
+  "local"})` adds a content pack, a downloaded map's settings or a mod, watched as the
+  project's layers are; `push_layer_text(name, text)` adds one from received text, read from
+  the text alone with any `#include` refused; `remove_layer(name)` leaves no trace.
+- **Resources.** `Baker.bind_resource(stats, {"max_hp": "units.{kind}.hp"})` binds a
+  Resource's properties as a `BakerBinding` binds a node's, with the same shared tweaks; a
+  shader's parameters are a `ShaderMaterial`'s (`"shader_parameter/glow"`), so one path
+  can feed a script's value and a shader. It returns the binding; `unbind_resource` ends it.
 - **Tables, read whole.** With a Dictionary fallback, `Baker.get_value("units", {})` is a
   keyed table as a Dictionary of records, `{"tank": {"hp": 10, "price": 50, ...}, ...}`; with
   an Array fallback, a list of records with one tag is an Array of them

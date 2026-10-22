@@ -42,6 +42,7 @@
 #include <baker/script.hpp>
 
 #include <godot_cpp/classes/node.hpp>
+#include <godot_cpp/classes/resource.hpp>
 #include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/packed_string_array.hpp>
@@ -84,6 +85,25 @@ public:
     godot::Error set_layer_enabled(const godot::String& layer, bool enabled);
     // The new state.
     bool toggle_layer(const godot::String& layer);
+    // A layer the game finds after it starts: a content pack, a downloaded map's settings,
+    // a mod. On top of the stack, or where `options` say: {optional, enabled, below, above}
+    // (below or above a layer's name). Its file is watched as the project's layers are.
+    godot::Error push_layer(const godot::String& name, const godot::String& path,
+                            const godot::Dictionary& options);
+    // A layer from text the game received (from a server, a mod store, a save): read from
+    // the text alone, never a cache, and an #include in it is refused, so content from
+    // outside the game reaches no other file. Write-back refuses its values: it has no file.
+    godot::Error push_layer_text(const godot::String& name, const godot::String& text,
+                                 const godot::Dictionary& options);
+    // Removes a layer, leaving no trace: what it set goes back to the layers below.
+    godot::Error remove_layer(const godot::String& name);
+    // Binds a Resource's properties to paths, as a BakerBinding binds a node's: the same
+    // shared tweaks, keyed paths ({kind}) and property_changed. A shader's parameters are a
+    // ShaderMaterial's properties ("shader_parameter/glow"). Returns the binding, a child of
+    // this runtime: free it, or unbind_resource, to unbind.
+    class BakerBinding* bind_resource(const godot::Ref<godot::Resource>& resource,
+                                      const godot::Dictionary& bindings);
+    void unbind_resource(const godot::Ref<godot::Resource>& resource);
     // Re-reads the files that changed; true if anything did.
     bool reload();
 

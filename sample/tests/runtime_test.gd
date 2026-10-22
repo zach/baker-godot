@@ -169,6 +169,57 @@ func run() -> void:
 		"metadata after a value is left out: %s" % [Baker.get_value("probe.rec", {})])
 	Baker.clear_scratch()
 
+	# Layers the game finds after it starts: a content pack merges into the unit table, and
+	# removing it leaves no trace.
+	var pack := FileAccess.open("user://baker/pack.dta", FileAccess.WRITE)
+	pack.store_string("(units (scout (hp 6) (move 8) (attack 4) (armor 0) (price 30)) (tank (price 40)))\n")
+	pack.close()
+	check(Baker.push_layer("pack", "user://baker/pack.dta", {"below": "local"}) == OK,
+		"push_layer: a content pack below local")
+	check(Baker.get_layers().map(func(l): return l["name"])
+		== ["default", "pack", "local", "agent", "floaty", "scratch"], "in its place in the stack")
+	check(SkirmishCatalog.units().has("scout") and SkirmishCatalog.units()["tank"]["price"] == 40,
+		"its records merge into the table: a new unit, a retuned price")
+	pack = FileAccess.open("user://baker/pack.dta", FileAccess.WRITE)
+	pack.store_string("(units (scout (hp 6) (move 8) (attack 4) (armor 0) (price 30)) (tank (price 35)))\n")
+	pack.close()
+	await until(func(): return SkirmishCatalog.units()["tank"]["price"] == 35)
+	check(SkirmishCatalog.units()["tank"]["price"] == 35, "an edit of the pack's file reloads")
+	check(Baker.remove_layer("pack") == OK and not SkirmishCatalog.units().has("scout")
+		and SkirmishCatalog.units()["tank"]["price"] == 50, "remove_layer: the table as it was")
+	DirAccess.remove_absolute("user://baker/pack.dta")
+	check(Baker.push_layer_text("mod", "(units (tank (hp 12)))") == OK
+		and SkirmishCatalog.units()["tank"]["hp"] == 12
+		and Baker.source("units.tank.hp")["layer"] == "mod",
+		"push_layer_text: a layer from received text, named by its source")
+	check(Baker.push_layer_text("sneaky", "#include \"skirmish.dta\"\n") != OK
+		and not Baker.get_layers().any(func(l): return l["name"] == "sneaky"),
+		"received text that includes a file is refused")
+	check(Baker.remove_layer("mod") == OK and SkirmishCatalog.units()["tank"]["hp"] == 10,
+		"and removed")
+
+	# A Resource's properties, bound as a node's: one path can feed a script's value and a
+	# shader's parameter.
+	var tweaks_at_start := BakerBinding.shared_tweak_count()
+	var stat_res: Resource = preload("res://tests/stats_probe.gd").new()
+	var material := ShaderMaterial.new()
+	material.shader = Shader.new()
+	material.shader.code = "shader_type canvas_item; uniform float glow = 1.0;"
+	var stats_binding: BakerBinding = Baker.bind_resource(stat_res,
+		{"max_hp": "units.{kind}.hp", "glow": "fx.glow"})
+	Baker.bind_resource(material, {"shader_parameter/glow": "fx.glow"})
+	check(stats_binding != null and stat_res.max_hp == 10.0,
+		"bind_resource: a Resource's property reads its record, by its own key: %s" % [stat_res.max_hp])
+	check(Baker.set_value("fx.glow", 2.5) == OK and stat_res.glow == 2.5
+		and material.get_shader_parameter("glow") == 2.5,
+		"one path feeds the Resource and the shader parameter: %s, %s"
+			% [stat_res.glow, material.get_shader_parameter("glow")])
+	Baker.clear_scratch()
+	Baker.unbind_resource(stat_res)
+	Baker.unbind_resource(material)
+	await get_tree().process_frame
+	check(BakerBinding.shared_tweak_count() == tweaks_at_start, "unbind_resource: their tweaks go")
+
 	# Bindings at scale: forty scouts and twenty tanks, one binding each through the path
 	# units.{kind}.max_hp, make two tweaks, and an edit of a kind reaches every unit of it.
 	var tweaks_before := BakerBinding.shared_tweak_count()

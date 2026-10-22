@@ -97,6 +97,14 @@ void BakerRuntime::_bind_methods() {
     ClassDB::bind_method(D_METHOD("set_layer_enabled", "layer", "enabled"),
                          &BakerRuntime::set_layer_enabled);
     ClassDB::bind_method(D_METHOD("toggle_layer", "layer"), &BakerRuntime::toggle_layer);
+    ClassDB::bind_method(D_METHOD("push_layer", "name", "path", "options"),
+                         &BakerRuntime::push_layer, DEFVAL(Dictionary()));
+    ClassDB::bind_method(D_METHOD("push_layer_text", "name", "text", "options"),
+                         &BakerRuntime::push_layer_text, DEFVAL(Dictionary()));
+    ClassDB::bind_method(D_METHOD("remove_layer", "name"), &BakerRuntime::remove_layer);
+    ClassDB::bind_method(D_METHOD("bind_resource", "resource", "bindings"),
+                         &BakerRuntime::bind_resource);
+    ClassDB::bind_method(D_METHOD("unbind_resource", "resource"), &BakerRuntime::unbind_resource);
     ClassDB::bind_method(D_METHOD("reload"), &BakerRuntime::reload);
     ClassDB::bind_method(D_METHOD("get_value", "path", "fallback"), &BakerRuntime::get_value,
                          DEFVAL(Variant()));
@@ -555,6 +563,74 @@ Array BakerRuntime::get_layers() const {
         out.push_back(d);
     }
     return out;
+}
+
+namespace {
+
+// A layer's options from GDScript: {optional, enabled, below, above}. `names` holds the
+// strings the options' views point at, for the push.
+baker::LayerOptions layer_options(const Dictionary& d, std::string (&names)[2]) {
+    baker::LayerOptions o;
+    o.optional = bool(d.get("optional", false));
+    o.enabled = bool(d.get("enabled", true));
+    names[0] = to_std(String(d.get("below", "")));
+    names[1] = to_std(String(d.get("above", "")));
+    o.below = names[0];
+    o.above = names[1];
+    return o;
+}
+
+}  // namespace
+
+godot::Error BakerRuntime::push_layer(const String& name, const String& path,
+                                      const Dictionary& options) {
+    if (!config()) return godot::ERR_UNCONFIGURED;
+    std::string names[2];
+    if (auto r = config()->push_layer(to_std(name), to_std(path), layer_options(options, names));
+        !r)
+        return fail(r.error());
+    changed();
+    return godot::OK;
+}
+
+godot::Error BakerRuntime::push_layer_text(const String& name, const String& text,
+                                           const Dictionary& options) {
+    if (!config()) return godot::ERR_UNCONFIGURED;
+    std::string names[2];
+    if (auto r =
+            config()->push_layer_text(to_std(name), to_std(text), layer_options(options, names));
+        !r)
+        return fail(r.error());
+    changed();
+    return godot::OK;
+}
+
+godot::Error BakerRuntime::remove_layer(const String& name) {
+    if (!config()) return godot::ERR_UNCONFIGURED;
+    if (auto r = config()->remove_layer(to_std(name)); !r) return fail(r.error());
+    changed();
+    return godot::OK;
+}
+
+BakerBinding* BakerRuntime::bind_resource(const godot::Ref<godot::Resource>& resource,
+                                          const Dictionary& bindings) {
+    if (resource.is_null()) return nullptr;
+    unbind_resource(resource);
+    auto* binding = memnew(BakerBinding);
+    binding->set_name("Resource" + String::num_int64(int64_t(resource->get_instance_id())));
+    binding->set_target(resource.ptr());
+    binding->set_bindings(bindings);
+    add_child(binding);  // binds as it enters, as a node's binding does
+    return binding;
+}
+
+void BakerRuntime::unbind_resource(const godot::Ref<godot::Resource>& resource) {
+    if (resource.is_null()) return;
+    const String name = "Resource" + String::num_int64(int64_t(resource->get_instance_id()));
+    if (godot::Node* old = get_node_or_null(godot::NodePath(name))) {
+        remove_child(old);
+        old->queue_free();
+    }
 }
 
 godot::Error BakerRuntime::set_layer_enabled(const String& layer, bool enabled) {
