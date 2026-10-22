@@ -60,25 +60,32 @@ jobs:
           if [ "$RUNNER_OS" = macOS ]; then unzip -q godot.zip -d godot; else 7z x -ogodot godot.zip >/dev/null; fi
           chmod +x godot/* "godot/${{ matrix.godot }}" 2>/dev/null || true
       - name: Import the sample
+        id: import
         # A fresh headless import of a project with a GDExtension can crash on exit in
         # Godot 4.5.1, with godot-cpp's own example too; the second import is clean.
         run: |
           godot/${{ matrix.godot }} --headless --path sample --import || true
           godot/${{ matrix.godot }} --headless --path sample --import
+      # Each suite runs once the sample imports, whatever the one before it did, so a run
+      # reports every failure; the job fails if any does.
       - name: Runtime tests
+        if: ${{ !cancelled() && steps.import.outcome == 'success' }}
         timeout-minutes: 2
         run: godot/${{ matrix.godot }} --headless --path sample res://tests/runtime_test.tscn
       - name: Scenario jump
+        if: ${{ !cancelled() && steps.import.outcome == 'success' }}
         timeout-minutes: 2
         run: godot/${{ matrix.godot }} --headless --fixed-fps 60 --path sample -- --baker sim --scenario jump
       - name: The demonstration, in a headless editor
+        if: ${{ !cancelled() && steps.import.outcome == 'success' }}
         timeout-minutes: 5
         run: tests/e2e.sh "$PWD/godot/${{ matrix.godot }}"
       - name: An agent's loop, through the tool commands and the console
+        if: ${{ !cancelled() && steps.import.outcome == 'success' }}
         timeout-minutes: 5
         run: tests/agent.sh "$PWD/godot/${{ matrix.godot }}"
       - name: A release export, run
-        if: matrix.preset != ''
+        if: ${{ !cancelled() && steps.import.outcome == 'success' && matrix.preset != '' }}
         timeout-minutes: 10
         run: |
           "$(command -v python3 || command -v python)" tools/fetch_template.py "$GODOT_VERSION" ${{ matrix.template }}
