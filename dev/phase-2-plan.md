@@ -41,6 +41,13 @@ content; emitting shapes from a GDScript class, until hand-written shapes prove 
 - **A live edit of one instance's bound property is an edit of its path,** and so of every
   instance that binds it: right for a type's stats. State a game derives from a stat (current
   hit points from the maximum) re-derives on `property_changed`.
+- **The match lock is the integration's own, not the Config's freeze.** Baker's `freeze()`
+  is one way and refuses changes; a match needs them held, in order, and applied at a turn's
+  boundary. The fingerprint is FNV-1a over the merged tree's structure (numbers by their
+  bits, text by its bytes) and each live edit by its path, until Baker's digest (0017).
+- **A reload lands at the frame's start:** the live loop runs from the scene tree's
+  `physics_frame`, or its `process_frame` when a frame has no physics step, never from a
+  node's step.
 - **Step 6 starts on today's Baker** (a turn as one step at a rate of one); note 0018 (a run
   that ends on a condition, in the host's own steps) replaces the convention when it ships.
 

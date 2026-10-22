@@ -260,6 +260,68 @@ func run() -> void:
 	check(BakerBinding.shared_tweak_count() == tweaks_before,
 		"the units gone, their tweaks go: %d left" % [BakerBinding.shared_tweak_count()])
 
+	# A reload lands at the frame's start: a node processed before every other sees it in the
+	# same frame as one processed after.
+	var early: Node = load("res://tests/frame_probe.gd").new()
+	var late: Node = load("res://tests/frame_probe.gd").new()
+	early.process_priority = -1000
+	late.process_priority = 1000
+	for probe in [early, late]:
+		probe.player = player
+		add_child(probe)
+	for height in [113.0, 114.0, 115.0]:
+		f = FileAccess.open(LOCAL, FileAccess.WRITE)
+		f.store_string("(player (jump (height %d)))\n" % height)
+		f.close()
+		await until(func(): return player.jump_height == height)
+	await get_tree().process_frame
+	var torn := []
+	for frame in early.seen:
+		if late.seen.has(frame) and early.seen[frame] != late.seen[frame]:
+			torn.append([frame, early.seen[frame], late.seen[frame]])
+	check(player.jump_height == 115.0 and torn.is_empty(),
+		"no frame sees part of a reload: the first node and the last read alike %s" % [torn])
+	early.free()
+	late.free()
+
+	# A match in lockstep: the data's fingerprint, and a lock that holds every change for the
+	# turn's boundary.
+	var print0 := Baker.fingerprint()
+	check(print0.length() == 16 and print0 == Baker.fingerprint(),
+		"fingerprint(): sixteen hex digits, the same for the same data: %s" % print0)
+	Baker.set_value("player.jump.height", 111.0)
+	check(Baker.fingerprint() != print0, "a live edit moves it")
+	Baker.clear_scratch()
+	check(Baker.fingerprint() == print0, "and it returns with the data")
+	check(Baker.lock() == print0 and Baker.is_locked(), "lock() returns it")
+	var peak: float = Baker.get_value("player.jump.time_to_peak", 0.0)
+	check(Baker.toggle_layer("floaty"), "a toggle during a match says the state it will have")
+	check(Baker.set_value("player.jump.height", 108.0) == OK, "a live edit is taken")
+	f = FileAccess.open(LOCAL, FileAccess.WRITE)
+	f.store_string("(player (run (speed 230)))\n")
+	f.close()
+	for i in 10:
+		await get_tree().process_frame
+	check(Baker.get_value("player.jump.time_to_peak", 0.0) == peak and player.jump_height == 115.0
+		and Baker.get_value("player.run.speed", 0) == 220 and Baker.fingerprint() == print0,
+		"and with a file saved, all wait for the turn's boundary: the data is as locked")
+	check(Baker.held_count() == 2, "held_count(): the toggle and the edit")
+	var print1 := Baker.apply_held()
+	check(Baker.get_value("player.jump.time_to_peak", 0.0) == 0.5 and player.jump_height == 108.0
+		and Baker.get_value("player.run.speed", 0) == 230,
+		"apply_held(): all of it at once, the saved file too")
+	check(print1 != print0 and print1 == Baker.fingerprint() and Baker.is_locked(),
+		"it returns the new fingerprint, and the data stays locked")
+	Baker.toggle_layer("floaty")
+	Baker.unlock()
+	check(not Baker.is_locked() and Baker.held_count() == 0
+		and not Baker.get_layers()[3]["enabled"], "unlock() applies what waited")
+	Baker.clear_scratch()
+	f = FileAccess.open(LOCAL, FileAccess.WRITE)
+	f.store_string("")
+	f.close()
+	Baker.reload()
+
 	# A bound node gone: its tweaks go with it.
 	player.queue_free()
 	await get_tree().process_frame

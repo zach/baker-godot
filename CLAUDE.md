@@ -24,8 +24,8 @@ Godot's terms; baker-dev's `INTEGRATIONS.md` is the policy. For work here:
 - No Godot engine source. The sample is written here from scratch.
 - Before each commit: `clang-format-18 -i src/*`, build `template_debug` and
   `template_release`, then run `sample/tests/runtime_test.tscn`, the `jump` scenario,
-  `tests/e2e.sh`, `tests/agent.sh`, and `tests/export.sh` headless (README). A fresh
-  headless import can crash on exit; import twice.
+  `tests/e2e.sh`, `tests/agent.sh`, `tests/lockstep.sh` and `tests/export.sh` headless
+  (README). A fresh headless import can crash on exit; import twice.
 - Scope is tunables and rules, never scenes.
 - The agent skill (`.claude/skills/sample-agent/SKILL.md`) teaches the loop over the
   sample's commands; change it with them. `tests/agent.sh` runs the loop it teaches.

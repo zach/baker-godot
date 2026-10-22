@@ -84,6 +84,10 @@ jobs:
         if: ${{ !cancelled() && steps.import.outcome == 'success' }}
         timeout-minutes: 5
         run: tests/agent.sh "$PWD/godot/${{ matrix.godot }}"
+      - name: Two peers of a lockstep match
+        if: ${{ !cancelled() && steps.import.outcome == 'success' }}
+        timeout-minutes: 5
+        run: tests/lockstep.sh "$PWD/godot/${{ matrix.godot }}"
       - name: A release export, run
         if: ${{ !cancelled() && steps.import.outcome == 'success' && matrix.preset != '' }}
         timeout-minutes: 10

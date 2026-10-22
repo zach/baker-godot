@@ -25,7 +25,9 @@ the remote inspector sends, and checks the diff.
   `baker-project.dta` at the project root: the same layer stack Baker's editor and checker
   read. It runs Baker's host loop (`baker::host::Live`): in debug builds it reloads a layer
   file when it is saved, within a frame, watching the files through the operating system
-  (res:// and user:// are mapped to their directories on the disk).
+  (res:// and user:// are mapped to their directories on the disk). A reload lands at the
+  start of a frame, before its first physics step or else its process step, so every node
+  in that frame, and any work a node starts, reads the whole reload or none of it.
 - **`BakerBinding`**, a node that binds properties of its parent to paths in the data:
 
   ```
@@ -61,6 +63,14 @@ the remote inspector sends, and checks the diff.
   Resource's properties as a `BakerBinding` binds a node's, with the same shared tweaks; a
   shader's parameters are a `ShaderMaterial`'s (`"shader_parameter/glow"`), so one path
   can feed a script's value and a shader. It returns the binding; `unbind_resource` ends it.
+- **A match in lockstep.** `Baker.fingerprint()` is the data as the game reads it, as
+  sixteen hex digits: peers compare theirs before a match. `Baker.lock()` returns it and
+  holds every change until `apply_held()`, which a game calls at a turn's boundary and which
+  returns the new fingerprint: a toggle from the game or the dock, a live edit, a layer
+  pushed or removed, a file saved, and the console. `unlock()` applies what waited.
+  `sample/skirmish/peer.gd` is a match's first exchange between two processes, and
+  `tests/lockstep.sh` runs it: peers on the same data agree; a peer with an extra layer is
+  refused.
 - **Tables, read whole.** With a Dictionary fallback, `Baker.get_value("units", {})` is a
   keyed table as a Dictionary of records, `{"tank": {"hp": 10, "price": 50, ...}, ...}`; with
   an Array fallback, a list of records with one tag is an Array of them
@@ -179,6 +189,7 @@ godot --headless --fixed-fps 60 --path sample -- --baker sim   # the scenarios, 
 godot --headless --path sample res://tests/runtime_test.tscn
 tests/e2e.sh path/to/godot                              # the demonstration, headless
 tests/agent.sh path/to/godot                            # an agent's loop
+tests/lockstep.sh path/to/godot                         # two peers agree on the data
 tests/export.sh path/to/godot                           # a release export, run
 ```
 

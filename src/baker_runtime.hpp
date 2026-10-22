@@ -3,7 +3,8 @@
 // BakerRuntime: the game's Baker, as the autoload `Baker` (addons/baker/baker.gd extends
 // it). Baker's host loop (baker::host::Live) owns the Config: it opens the stack the
 // project file names and, in debug builds, reloads what was saved, watching the files
-// through the operating system. Everything runs on the main thread.
+// through the operating system. A reload lands at the start of a frame, before its first
+// physics step or else its process step. Everything runs on the main thread.
 //
 //   var h = Baker.get_value("player.jump.height", 96.0)   # a read through the Config
 //   var g = Baker.tweak("world.gravity", 980.0)           # cached until the data changes
@@ -47,6 +48,7 @@
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/packed_string_array.hpp>
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -106,6 +108,24 @@ public:
     void unbind_resource(const godot::Ref<godot::Resource>& resource);
     // Re-reads the files that changed; true if anything did.
     bool reload();
+
+    // --- A match, in lockstep. ---
+    // The data as the game reads it, every enabled layer merged and the live edits, as
+    // sixteen hex digits: equal data gives an equal fingerprint on every platform. Peers
+    // compare theirs before a match and at each turn's boundary.
+    [[nodiscard]] godot::String fingerprint() const;
+    // Locks the data for a match, and returns its fingerprint. Until unlock(), what would
+    // change the data waits, in order: a toggle (from the game or the editor), a live edit,
+    // a layer pushed or removed, a reload, a file saved; and the console waits with it.
+    // toggle_layer() returns the state the layer will have. Reads see the locked data.
+    godot::String lock();
+    // At a turn's boundary: applies what waited, all at once, and returns the new
+    // fingerprint. The data stays locked.
+    godot::String apply_held();
+    // Applies what waited, and unlocks.
+    void unlock();
+    [[nodiscard]] bool is_locked() const noexcept { return locked_; }
+    [[nodiscard]] int held_count() const noexcept { return int(held_.size()); }
 
     // --- Reading. ---
     // The value at `path`, read as `fallback`'s type; `fallback` if the path is missing or
@@ -188,6 +208,13 @@ private:
     // next frame what a call here already reported.
     void changed_since();
     godot::Error fail(const baker::Error& error);
+    // While locked, keeps `change` for apply_held(); true if it was kept.
+    bool hold(std::function<void()> change);
+    // Live's frame, at the start of the engine's: before the first physics step, else before
+    // process, so that no node, and no work a node starts, sees part of a reload.
+    void begin_frame();
+    void physics_frame();
+    void process_frame();
     void present();
     godot::Error wrote(const baker::WriteReport& report);
     [[nodiscard]] godot::Variant with_live_edits(const godot::String& path,
@@ -208,6 +235,9 @@ private:
     bool project_writes_ = false;
     bool capturing_ = false;      // registered with the editor's debugger
     bool session_dirty_ = false;  // the session changed since it was last sent
+    bool frame_begun_ = false;    // Live's frame began in this iteration of the main loop
+    bool locked_ = false;
+    std::vector<std::function<void()>> held_;  // what waits for apply_held()
     godot::Array last_written_;
 
     // Live binds the Config's tools into the Context, which outlives it.

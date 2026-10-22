@@ -106,6 +106,12 @@ void BakerRuntime::_bind_methods() {
                          &BakerRuntime::bind_resource);
     ClassDB::bind_method(D_METHOD("unbind_resource", "resource"), &BakerRuntime::unbind_resource);
     ClassDB::bind_method(D_METHOD("reload"), &BakerRuntime::reload);
+    ClassDB::bind_method(D_METHOD("fingerprint"), &BakerRuntime::fingerprint);
+    ClassDB::bind_method(D_METHOD("lock"), &BakerRuntime::lock);
+    ClassDB::bind_method(D_METHOD("apply_held"), &BakerRuntime::apply_held);
+    ClassDB::bind_method(D_METHOD("unlock"), &BakerRuntime::unlock);
+    ClassDB::bind_method(D_METHOD("is_locked"), &BakerRuntime::is_locked);
+    ClassDB::bind_method(D_METHOD("held_count"), &BakerRuntime::held_count);
     ClassDB::bind_method(D_METHOD("get_value", "path", "fallback"), &BakerRuntime::get_value,
                          DEFVAL(Variant()));
     ClassDB::bind_method(D_METHOD("tweak", "path", "fallback"), &BakerRuntime::tweak);
@@ -168,6 +174,8 @@ void BakerRuntime::_enter_tree() {
         // Edit-to-see ends when the frame showing the edit is drawn.
         godot::RenderingServer::get_singleton()->connect("frame_post_draw",
                                                          callable_mp(this, &BakerRuntime::present));
+        get_tree()->connect("physics_frame", callable_mp(this, &BakerRuntime::physics_frame));
+        get_tree()->connect("process_frame", callable_mp(this, &BakerRuntime::process_frame));
         godot::EngineDebugger* debugger = godot::EngineDebugger::get_singleton();
         if (debugger->is_active() && !debugger->has_capture("baker")) {
             debugger->register_message_capture("baker",
@@ -185,6 +193,13 @@ void BakerRuntime::_exit_tree() {
         const godot::Callable present = callable_mp(this, &BakerRuntime::present);
         if (rs->is_connected("frame_post_draw", present))
             rs->disconnect("frame_post_draw", present);
+        godot::SceneTree* tree = get_tree();
+        const godot::Callable physics = callable_mp(this, &BakerRuntime::physics_frame);
+        const godot::Callable process = callable_mp(this, &BakerRuntime::process_frame);
+        if (tree->is_connected("physics_frame", physics))
+            tree->disconnect("physics_frame", physics);
+        if (tree->is_connected("process_frame", process))
+            tree->disconnect("process_frame", process);
         if (capturing_) godot::EngineDebugger::get_singleton()->unregister_message_capture("baker");
         capturing_ = false;
     }
@@ -241,13 +256,29 @@ void BakerRuntime::_process(double) {
     if (!tool_args_.empty() && ++tool_frames_ == 2) run_tool_command();
     if constexpr (!baker::kShipping) {
         if (!live_) return;
-        live_->begin_frame();  // reloads what was saved; answers the console
         if (capturing_ && session_dirty_) {
             session_dirty_ = false;
             godot::EngineDebugger::get_singleton()->send_message("baker:session",
                                                                  Array::make(session()));
         }
     }
+}
+
+void BakerRuntime::begin_frame() {
+    if (!live_ || frame_begun_ || locked_) return;
+    frame_begun_ = true;
+    live_->begin_frame();  // reloads what was saved, assigning every binding; answers the console
+}
+
+// The scene tree's signals, before any node's step: physics_frame before each physics step
+// (none, some frames), process_frame once, after them.
+void BakerRuntime::physics_frame() {
+    begin_frame();
+}
+
+void BakerRuntime::process_frame() {
+    begin_frame();
+    frame_begun_ = false;  // the next iteration's first signal begins the next
 }
 
 void BakerRuntime::read_arguments() {
@@ -531,9 +562,101 @@ void BakerRuntime::present() {
 
 bool BakerRuntime::reload() {
     if (!live_) return false;
+    if (hold([this] { (void)reload(); })) return false;
     const bool reloaded = live_->reload_now();
     changed_since();
     return reloaded;
+}
+
+bool BakerRuntime::hold(std::function<void()> change) {
+    if (!locked_) return false;
+    held_.push_back(std::move(change));
+    session_dirty_ = true;
+    return true;
+}
+
+namespace {
+
+// FNV-1a over a tree's structure: each node's type and value, numbers by their bits and
+// text by its bytes, so the same data hashes the same on every platform.
+struct Fingerprint {
+    uint64_t h = 14695981039346656037ull;
+
+    void byte(uint8_t b) { h = (h ^ b) * 1099511628211ull; }
+    void u64(uint64_t v) {
+        for (int i = 0; i < 8; ++i) byte(uint8_t(v >> (8 * i)));
+    }
+    void text(std::string_view t) {
+        u64(t.size());
+        for (char c : t) byte(uint8_t(c));
+    }
+    void node(const baker::Node& n) {
+        byte(uint8_t(n.type()));
+        switch (n.type()) {
+            case baker::Type::Int: u64(uint64_t(n.try_int().value_or(0))); break;
+            case baker::Type::Float: u64(n.float_bits()); break;
+            case baker::Type::Symbol: text(n.try_sym()->str()); break;
+            case baker::Type::String: text(n.string()->view()); break;
+            case baker::Type::Array:
+            case baker::Type::Command:
+            case baker::Type::Property: array(*n.array()); break;
+            case baker::Type::Var: text(n.var_name().str()); break;
+            case baker::Type::Func: text(n.func_record()->name.str()); break;
+            case baker::Type::Object: u64(n.object_handle().bits); break;
+        }
+    }
+    void array(const baker::Array& a) {
+        u64(a.size());
+        for (const baker::Node& n : a) node(n);
+    }
+};
+
+}  // namespace
+
+String BakerRuntime::fingerprint() const {
+    if (!config()) return String();
+    Fingerprint f;
+    f.array(*config()->root());
+    // A live edit reaches root() at the next merge only: each is hashed by its path, in
+    // order. Once a merge takes one into root() the fingerprint moves, the data unchanged,
+    // which a match with no live edits never sees (requirement 0019 ends it).
+    std::vector<std::string_view> edits;
+    for (baker::Symbol edit : config()->unsaved()) edits.push_back(edit.str());
+    std::sort(edits.begin(), edits.end());
+    for (std::string_view edit : edits) {
+        f.text(edit);
+        auto r = config()->get<RawValues>(baker::Path(edit), RawValues{});
+        f.u64(r ? r->nodes.size() : 0);
+        if (r)
+            for (const baker::Node& n : r->nodes) f.node(n);
+    }
+    char hex[17];
+    std::snprintf(hex, sizeof hex, "%016llx", static_cast<unsigned long long>(f.h));
+    return String(hex);
+}
+
+String BakerRuntime::lock() {
+    locked_ = true;
+    session_dirty_ = true;
+    return fingerprint();
+}
+
+String BakerRuntime::apply_held() {
+    std::vector<std::function<void()>> held;
+    held.swap(held_);
+    const bool locked = locked_;
+    locked_ = false;
+    for (const std::function<void()>& change : held) change();
+    if constexpr (!baker::kShipping)
+        if (live_) live_->begin_frame();  // the files saved meanwhile, and the console
+    locked_ = locked;
+    session_dirty_ = true;
+    return fingerprint();
+}
+
+void BakerRuntime::unlock() {
+    (void)apply_held();
+    locked_ = false;
 }
 
 void BakerRuntime::changed_since() {
@@ -585,6 +708,7 @@ baker::LayerOptions layer_options(const Dictionary& d, std::string (&names)[2]) 
 godot::Error BakerRuntime::push_layer(const String& name, const String& path,
                                       const Dictionary& options) {
     if (!config()) return godot::ERR_UNCONFIGURED;
+    if (hold([=, this] { (void)push_layer(name, path, options); })) return godot::OK;
     std::string names[2];
     if (auto r = config()->push_layer(to_std(name), to_std(path), layer_options(options, names));
         !r)
@@ -596,6 +720,7 @@ godot::Error BakerRuntime::push_layer(const String& name, const String& path,
 godot::Error BakerRuntime::push_layer_text(const String& name, const String& text,
                                            const Dictionary& options) {
     if (!config()) return godot::ERR_UNCONFIGURED;
+    if (hold([=, this] { (void)push_layer_text(name, text, options); })) return godot::OK;
     std::string names[2];
     if (auto r =
             config()->push_layer_text(to_std(name), to_std(text), layer_options(options, names));
@@ -607,6 +732,7 @@ godot::Error BakerRuntime::push_layer_text(const String& name, const String& tex
 
 godot::Error BakerRuntime::remove_layer(const String& name) {
     if (!config()) return godot::ERR_UNCONFIGURED;
+    if (hold([=, this] { (void)remove_layer(name); })) return godot::OK;
     if (auto r = config()->remove_layer(to_std(name)); !r) return fail(r.error());
     changed();
     return godot::OK;
@@ -635,6 +761,7 @@ void BakerRuntime::unbind_resource(const godot::Ref<godot::Resource>& resource) 
 
 godot::Error BakerRuntime::set_layer_enabled(const String& layer, bool enabled) {
     if (!config()) return godot::ERR_UNCONFIGURED;
+    if (hold([=, this] { (void)set_layer_enabled(layer, enabled); })) return godot::OK;
     const std::string name = to_std(layer);
     if (config()->layer_enabled(name) == enabled) return godot::OK;
     if (auto r = config()->set_layer_enabled(name, enabled); !r) return fail(r.error());
@@ -644,6 +771,8 @@ godot::Error BakerRuntime::set_layer_enabled(const String& layer, bool enabled) 
 
 bool BakerRuntime::toggle_layer(const String& layer) {
     if (!config()) return false;
+    if (hold([=, this] { (void)toggle_layer(layer); }))
+        return !config()->layer_enabled(to_std(layer));
     auto r = config()->toggle_layer(to_std(layer));
     if (!r) return fail(r.error()), false;
     changed();
@@ -722,6 +851,7 @@ Array BakerRuntime::explain(const String& path) const {
 
 godot::Error BakerRuntime::set_value(const String& path, const Variant& value) {
     if (!config()) return godot::ERR_UNCONFIGURED;
+    if (hold([=, this] { (void)set_value(path, value); })) return godot::OK;
     if (value.get_type() == Variant::DICTIONARY) {
         // Each field it names, as its own live edit: the record's other fields stay.
         const Dictionary fields = value;
@@ -750,6 +880,7 @@ godot::Error BakerRuntime::set_value(const String& path, const Variant& value) {
 
 godot::Error BakerRuntime::clear_scratch(const String& path) {
     if (!config()) return godot::ERR_UNCONFIGURED;
+    if (hold([=, this] { (void)clear_scratch(path); })) return godot::OK;
     if (auto r = config()->clear_scratch(to_std(path)); !r) return fail(r.error());
     changed();
     return godot::OK;

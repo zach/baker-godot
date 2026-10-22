@@ -37,6 +37,14 @@ On Baker 0.5.0.
 - **`bind_resource(resource, bindings)`** binds a Resource's properties on the shared
   tweaks, a shader's parameters among them; a property that holds nothing yet binds as
   the type it declares.
+- **Lockstep.** `fingerprint()`, the data as the game reads it in sixteen hex digits,
+  the same on every platform for the same data; `lock()`, which holds every change to the
+  data (toggles, live edits, layers pushed or removed, files saved, the console) until
+  `apply_held()` at a turn's boundary, or `unlock()`; `is_locked()`, `held_count()`.
+  `sample/skirmish/peer.gd`: two peers refuse a match on different data.
+- **A reload lands at the start of a frame,** before its first physics step or its process
+  step, rather than during the autoload's process step: no node in a frame sees part of one.
+- **`tests/e2e.sh` exits with the editor's status;** it had always exited 0.
 - **The skirmish's tables:** units, buildings and the AI's opening in
   `sample/data/skirmish.dta`, held to their shapes by `check`, and read whole by
   `sample/skirmish/catalog.gd`, the start of the phase 2 sample.
