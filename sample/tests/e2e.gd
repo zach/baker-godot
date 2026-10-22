@@ -45,6 +45,7 @@ func run() -> void:
 	check(await wait(func(): return model.running and _binding("jump_height") != {}, 30.0),
 		"1. the game runs and sends its bindings")
 	if failures:
+		print("     running: %s, session: %s" % [model.running, model.session.keys()])
 		return finish()
 
 	var b := _binding("jump_height")
