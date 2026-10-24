@@ -25,8 +25,8 @@
 //                       {config.explain p}, {config.set p v}, {config.toggle layer}, ...
 //   --console-write     also config.write_back and config.promote
 //   --baker COMMAND...  run one of Baker's tool commands (check, reference, eval, diff,
-//                       promote --patch, sim, compare) once the scene is ready, then quit;
-//                       --out FILE writes its output there too. Shipping builds run sim
+//                       promote --baker-patch, sim, compare) once the scene is ready, then quit;
+//                       --baker-output FILE writes its output there too. Shipping builds run sim
 //                       and compare only.
 //
 // sim runs the project's scenarios (sim/scenarios.dta) from the game's own frames: before
@@ -217,8 +217,6 @@ private:
     void process_frame();
     void present();
     godot::Error wrote(const baker::WriteReport& report);
-    [[nodiscard]] godot::Variant with_live_edits(const godot::String& path,
-                                                 const godot::Variant& table) const;
     void read_arguments();
     std::string answer(const std::string& line);
     void run_tool_command();
@@ -256,7 +254,7 @@ private:
     std::unique_ptr<baker::host::SimRun> sim_;    // --baker sim, in progress
     bool sim_reloading_ = false;                  // the scene is being reset for the next run
     godot::Dictionary functions_;                 // bind_function: name -> Callable
-    std::string tool_out_;                        // --out FILE
+    std::string tool_out_;                        // --baker-output FILE
     int tool_frames_ = 0;
     int console_port_ = -1;  // --console-port N; -1: none
     bool console_write_ = false;

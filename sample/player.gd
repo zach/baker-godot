@@ -3,7 +3,7 @@
 ## Each @export below is bound to a path by the BakerBinding child, so it holds the data's
 ## value, follows every reload and layer toggle, and reads as a plain property. A path the
 ## data lacks leaves the value set here standing. Each range is the tweak's range too, which
-## tools and agents read in `--baker reference --json`.
+## tools and agents read in `--baker reference --baker-json`.
 extends CharacterBody2D
 
 @export_range(50, 600, 1) var run_speed := 200.0

@@ -12,8 +12,8 @@
 #     the one that does not: check passes, diff shows it, compare names only a fix;
 #  4. A/B in the running game over the console (on a free port): explain, toggle the agent
 #     layer, journal;
-#  5. promote --patch writes a one-line patch to tuning.dta and changes nothing; it applies.
-#     A patch or --out it cannot write (no directory; on Linux, /dev/full) exits 2.
+#  5. promote --baker-patch writes a one-line patch to tuning.dta and changes nothing; it applies.
+#     A patch or --baker-output it cannot write (no directory; on Linux, /dev/full) exits 2.
 set -uo pipefail
 py="$(command -v python3 || command -v python)"
 godot="$1"
@@ -48,24 +48,24 @@ check() {  # check CONDITION-STATUS DESCRIPTION
 }
 tool() {  # tool OUT ARGS...: a tool command, its output in $work/OUT
     local out="$1"; shift
-    timeout 60 "$godot" --headless --path "$work" -- --baker "$@" --out "$work/$out" >/dev/null 2>&1
+    timeout 60 "$godot" --headless --path "$work" -- --baker "$@" --baker-output "$work/$out" >/dev/null 2>&1
 }
-sim() {  # sim OUTDIR: every scenario over seeds 1-3, baker.sim/1.1 in $work/OUTDIR
-    timeout 120 "$godot" --headless --fixed-fps 60 --path "$work" -- --baker sim --seeds 1-3 --results "$work/$1" \
+sim() {  # sim OUTDIR: every scenario over seeds 1-3, baker.sim/1.3 in $work/OUTDIR
+    timeout 120 "$godot" --headless --fixed-fps 60 --path "$work" -- --baker sim --baker-seeds 1-3 --baker-results "$work/$1" \
         >/dev/null 2>&1
 }
 compare() {  # compare BEFORE AFTER OUT: baker.compare/1 in $work/OUT
-    timeout 60 "$godot" --headless --path "$work" -- --baker compare --before "$work/$1" \
-        --after "$work/$2" --out "$work/$3" >/dev/null 2>&1
+    timeout 60 "$godot" --headless --path "$work" -- --baker compare --baker-before "$work/$1" \
+        --baker-after "$work/$2" --baker-output "$work/$3" >/dev/null 2>&1
 }
 json() {  # json FILE PYTHON-EXPRESSION-OF-d: exit 0 if true
     "$py" -c "import json,sys; d=json.load(open(sys.argv[1])); sys.exit(0 if ($2) else 1)" "$work/$1"
 }
 
 # 1.
-tool check.json check --json; check $? "check passes"
+tool check.json check --baker-json; check $? "check passes"
 json check.json 'd["schema"].startswith("baker.check/") and d["passed"]'; check $? "  as baker.check JSON"
-tool ref.json reference --json; check $? "reference --json"
+tool ref.json reference --baker-json; check $? "reference --baker-json"
 json ref.json 'any(t["path"] == "player.jump.height" for t in d["tweaks"]["tweaks"])'
 check $? "  lists the bound properties as tweaks"
 json ref.json '[(t["range"], t["step"]) for t in d["tweaks"]["tweaks"] if t["path"] == "player.jump.height"] == [([16, 320], 1)]'
@@ -74,7 +74,7 @@ check $? "  with the range and step of each property's @export_range"
 # the property's range, fails it; a misspelled key beside them is a warning.
 bad() {  # bad BODY OUT: an agent's proposal, checked into $work/OUT; its exit status
     printf '%s\n' "$1" > "$work/data/agent.dta"
-    tool "$2" check --json; local status=$?
+    tool "$2" check --baker-json; local status=$?
     rm -f "$work/data/agent.dta"
     return $status
 }
@@ -103,8 +103,8 @@ check $? "  a whole new record passes"
 
 # The game's functions, from a tool command: reads see the command's data, and a call is held
 # to the function's parameters, as check holds the data's calls to them.
-timeout 60 "$godot" --headless --path "$work" -- --baker eval --json "{probe.value player.jump.height}" \
-    "{player.hold_jump 1 2 3}" "{probe.add 1}" "{probe.add}" --out "$work/calls.txt" >/dev/null 2>&1
+timeout 60 "$godot" --headless --path "$work" -- --baker eval --baker-json "{probe.value player.jump.height}" \
+    "{player.hold_jump 1 2 3}" "{probe.add 1}" "{probe.add}" --baker-output "$work/calls.txt" >/dev/null 2>&1
 "$py" - "$work/calls.txt" <<'PY'; check $? "the game's functions: get_value reads the data in a tool command; a wrong argument count is an error"
 import json, sys
 r = [json.loads(l) for l in open(sys.argv[1]) if l.strip()]
@@ -117,12 +117,12 @@ cp "$work/sim/objectives.dta" "$work/objectives.dta.bak"
 printf '(objective probe.height (measure {probe.value player.jump.height}) (pass {== $value 96}))\n' \
     >> "$work/sim/objectives.dta"
 printf '(scenario probe (seconds 0.5) (objectives probe.height))\n' > "$work/sim/scenarios/probe.dta"
-timeout 60 "$godot" --headless --fixed-fps 60 --path "$work" -- --baker sim --scenario probe >/dev/null 2>&1
+timeout 60 "$godot" --headless --fixed-fps 60 --path "$work" -- --baker sim --baker-scenario probe >/dev/null 2>&1
 check $? "  and get_value reads the run's data in sim"
 rm "$work/sim/scenarios/probe.dta"; mv "$work/objectives.dta.bak" "$work/sim/objectives.dta"
 # An enum property's choices are its tweak's allowed values: reference gives them, and check
 # holds the data to them.
-tool enums.json reference --json
+tool enums.json reference --baker-json
 json enums.json '{t["path"]: (t["one_of"], [(c["value"], c["name"]) for c in t.get("choices", [])]) for t in d["tweaks"]["tweaks"] if t["path"].startswith("probe.")} == {"probe.attack": (["light", "heavy"], []), "probe.difficulty": ([], [(0, "Easy"), (1, "Normal"), (5, "Hard")])}'
 check $? "an enum property's choices are its tweak's: a String's one_of, an int's named choices"
 bad '(probe (attack "medium"))' enum1.json; [ $? -eq 1 ]; check $? "  a string outside them fails check"
@@ -132,24 +132,24 @@ bad '(probe (attack "heavy") (difficulty 5))' enum3.json; check $? "  values amo
 # 2.
 sim before; status=$?
 [ "$status" -eq 1 ]; check $? "the baseline: reach fails on the shipped data (sim exits 1)"
-json before/results.json 'd["schema"] == "baker.sim/1.1" and d["status"] == "failed"'
-check $? "  as baker.sim/1.1 results"
+json before/results.json 'd["schema"] == "baker.sim/1.3" and d["status"] == "failed"'
+check $? "  as baker.sim/1.3 results"
 json before/results.json '[(r["scenario"], r["seed"]) for r in d["runs"]] == [("jump", s) for s in (1, 2, 3)] + [("reach", s) for s in (1, 2, 3)]'
 check $? "  every scenario, each seed a run of its own"
 json before/results.json '[o["value"] for r in d["runs"] for o in r["objectives"]] == [96.06] * 9'
 check $? "  the same apex in every run: 96.06"
-tool layers.json eval --json "{config.layers}"
+tool layers.json eval --baker-json "{config.layers}"
 json layers.json '[l["layer"] for l in d["value"]] == ["default", "agent", "floaty", "scratch"]'
 check $? "  the tool commands leave out the local layer"
 # A scenario is data: check holds its calls to the game's functions, by name and by their
 # parameters.
 printf '(scenario typo (seconds 1) (at 0.5 {player.hold_jmup}))\n' > "$work/sim/scenarios/typo.dta"
-tool typo.json check --json; [ $? -eq 1 ]; check $? "  a scenario calling a function the game lacks fails check"
+tool typo.json check --baker-json; [ $? -eq 1 ]; check $? "  a scenario calling a function the game lacks fails check"
 json typo.json '[x["name"] for x in d["demand"]] == ["player.hold_jmup"]'
 check $? "    which names it"
 printf '(scenario args (seconds 1) (at 0.5 {player.hold_jump 1 2 3}) (at 0.6 {player.move}))\n' \
     > "$work/sim/scenarios/typo.dta"
-tool args.json check --json; [ $? -eq 1 ]; check $? "  so does one calling a function with the wrong arguments"
+tool args.json check --baker-json; [ $? -eq 1 ]; check $? "  so does one calling a function with the wrong arguments"
 json args.json 'len(d["errors"]) == 2 and all(e["file"].endswith("typo.dta") for e in d["errors"])'
 check $? "    both calls, located"
 rm "$work/sim/scenarios/typo.dta"
@@ -162,7 +162,7 @@ json over.json 'd["schema"] == "baker.compare/1" and d["broke"] == 1 and {o["nam
 check $? "  it fixed the first platform and broke the second: not done"
 printf '; The agent: a higher jump, to clear the first platform.\n(player (jump (height 120)))\n' \
     > "$work/data/agent.dta"
-tool check2.json check --json; check $? "a jump of 120: check passes"
+tool check2.json check --baker-json; check $? "a jump of 120: check passes"
 tool diff.txt diff; grep -q "player.jump.height  96 -> 120" "$work/diff.txt"
 check $? "  diff: $(grep player "$work/diff.txt" | xargs)"
 sim after; check $? "  sim passes"
@@ -200,17 +200,17 @@ PY
 
 # 5.
 before=$(cat "$work/data/tuning.dta")
-tool promote.txt promote --to default --patch "$work/agent.patch"; check $? "promote --patch"
+tool promote.txt promote --baker-to default --baker-patch "$work/agent.patch"; check $? "promote --baker-patch"
 [ "$before" == "$(cat "$work/data/tuning.dta")" ]; check $? "  writes no data"
 [ "$(grep -c '^[-+] ' "$work/agent.patch")" -eq 2 ]; check $? "  one line changed: $(grep '^+ ' "$work/agent.patch" | xargs)"
 fails() {  # fails ARGS...: a tool command that cannot write its output exits 2
     timeout 60 "$godot" --headless --path "$work" -- --baker "$@" >/dev/null 2>&1
     [ $? -eq 2 ]
 }
-fails promote --patch "$work/no-such-dir/agent.patch"; check $? "  a patch it cannot write fails"
-fails diff --out "$work/no-such-dir/diff.txt"; check $? "  so does --out"
+fails promote --baker-patch "$work/no-such-dir/agent.patch"; check $? "  a patch it cannot write fails"
+fails diff --baker-output "$work/no-such-dir/diff.txt"; check $? "  so does --baker-output"
 if [ -w /dev/full ]; then  # Linux: every write fails, as on a full disk
-    fails promote --patch /dev/full; check $? "  so does a full disk"
+    fails promote --baker-patch /dev/full; check $? "  so does a full disk"
 fi
 (cd "$work" && git apply -p1 agent.patch); check $? "  it applies with git apply -p1"
 grep -q "(height 120)            ; apex above the takeoff" "$work/data/tuning.dta"

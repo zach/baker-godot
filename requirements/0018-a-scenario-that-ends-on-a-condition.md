@@ -1,5 +1,8 @@
 # 0018: A scenario that ends on a condition, in the host's own steps
 
+**Shipped** in Baker 0.6.0 (`(until {command})` naming how a run ended, `(steps N)`,
+`(at step N ...)`); phase 2's step 6 uses it for turns.
+
 ## The need
 
 A scenario can say when its run ends by the game's own state, not only by its length:

@@ -34,14 +34,14 @@ check() {
     if [ "$1" -eq 0 ]; then echo "ok   $2"; else echo "FAIL $2"; failures=$((failures + 1)); fi
 }
 [ -f "$game" ]; check $? "exports $preset"
-timeout 60 "$game" --headless --fixed-fps 60 -- --baker sim --scenario jump --results "$work/sim" \
+timeout 60 "$game" --headless --fixed-fps 60 -- --baker sim --baker-scenario jump --baker-results "$work/sim" \
     >/dev/null 2>&1
 check $? "the exported game runs the jump scenario"
 "$py" - "$work/sim/results.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
 print("     ", json.dumps(d["runs"][0]["objectives"]))
-assert d["schema"] == "baker.sim/1.1" and d["status"] == "passed", d
+assert d["schema"] == "baker.sim/1.3" and d["status"] == "passed", d
 # tuning.dta's 96: not the scene's 80, nor the 300 of an agent.dta (dev_only: never shipped)
 assert abs(d["runs"][0]["objectives"][0]["value"] - 96) <= 2, d
 PY

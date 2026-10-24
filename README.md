@@ -122,21 +122,21 @@ carry over.
   properties are tweaks:
 
   ```sh
-  godot --headless --path sample -- --baker check --json         # baker.check/1.3
-  godot --headless --path sample -- --baker reference --json     # vocabulary, tweaks, shapes
-  godot --headless --fixed-fps 60 --path sample -- --baker sim --seeds 1-3 --results runs/before
-  godot --headless --path sample -- --baker compare --before runs/before --after runs/after
-  godot --headless --path sample -- --baker eval --json "{config.explain player.jump.height}"
+  godot --headless --path sample -- --baker check --baker-json         # baker.check/1.4
+  godot --headless --path sample -- --baker reference --baker-json     # vocabulary, tweaks, shapes
+  godot --headless --fixed-fps 60 --path sample -- --baker sim --baker-seeds 1-3 --baker-results runs/before
+  godot --headless --path sample -- --baker compare --baker-before runs/before --baker-after runs/after
+  godot --headless --path sample -- --baker eval --baker-json "{config.explain player.jump.height}"
   godot --headless --path sample -- --baker diff                 # what agent.dta changes
-  godot --headless --path sample -- --baker promote --patch agent.patch
+  godot --headless --path sample -- --baker promote --baker-patch agent.patch
   ```
 
   These are Baker's own tool commands (its host kit), reading through Godot's file access.
-  `--out FILE` writes a command's result to a file too (a `user://` path as well); `promote`
-  never writes into the project: `--patch` gives the change for a person to apply.
+  `--baker-output FILE` writes a command's result to a file too (a `user://` path as well); `promote`
+  never writes into the project: `--baker-patch` gives the change for a person to apply.
 - **`sim`** is Baker's: it runs the scenarios in `sample/sim/scenarios/` (all unless
-  `--scenario NAME`) and judges each run by the objectives in `sample/sim/objectives.dta`,
-  results as `baker.sim/1.1` (in `DIR/results.json` with `--results DIR`), exit 1 if an
+  `--baker-scenario NAME`) and judges each run by the objectives in `sample/sim/objectives.dta`,
+  results as `baker.sim/1.3` (in `DIR/results.json` with `--baker-results DIR`), exit 1 if an
   objective failed. Scenarios and objectives are data: they call the player's functions
   (`sample/sim/driver.gd`, bound with `Baker.bind_function`), and `check` holds those calls
   to the functions the game binds: their names, how many arguments, and of which types. The game drives each run from its own frames
@@ -200,7 +200,7 @@ step (run it under a display, such as `xvfb-run`).
 
 ## Building
 
-CMake fetches godot-cpp (4.5) and Baker 0.5.0 (its core and its host kit), and puts the library in
+CMake fetches godot-cpp (4.5) and Baker 0.6.0 (its core, its host kit and its tools), and puts the library in
 `sample/addons/baker/bin/`:
 
 ```sh

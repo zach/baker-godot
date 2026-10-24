@@ -5,7 +5,14 @@ versioning](https://semver.org); before 1.0.0, a minor version may change the AP
 
 ## Unreleased
 
-On Baker 0.5.0.
+On Baker 0.6.0.
+
+- **Baker 0.6.0.** The kit's tool-command flags begin `--baker-`: `--baker sim
+  --baker-scenario jump --baker-seeds 1-3 --baker-results DIR`, `--baker-json`, `compare
+  --baker-before A --baker-after B`, `promote --baker-patch FILE`, and `--baker-output FILE`
+  in place of `--out`. Results are `baker.sim/1.3`, checks `baker.check/1.4`.
+  `fingerprint()` is Baker's digest of the data; a read of a record sees the live edits
+  beneath it through Baker; a number is written as the same text on macOS as elsewhere.
 
 - **`check` holds calls to the game's functions to their parameters.** A function bound
   with `Baker.bind_function` is declared with its GDScript signature: its parameters'

@@ -1,5 +1,8 @@
 # 0017: A digest of the data a Config holds
 
+**Shipped** in Baker 0.6.0 (`Config::digest`, `stack_digest`, `{config.digest}`);
+`Baker.fingerprint()` is the digest, and the integration's own hash is gone.
+
 ## The need
 
 A host can ask a Config for a digest of its effective data: a short, stable value that is

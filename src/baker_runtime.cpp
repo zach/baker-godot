@@ -9,6 +9,7 @@
 #include <baker/project.hpp>
 #include <baker/std_interop.hpp>
 #include <baker/std_script.hpp>
+#include <baker/tools/layers.hpp>
 
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/engine_debugger.hpp>
@@ -48,12 +49,12 @@ void put_source(Dictionary& d, const baker::Source& s) {
     d["line"] = s.line;
 }
 
-const char* standing_name(baker::Standing s) {
+const char* standing_name(baker::tools::Standing s) {
     switch (s) {
-        case baker::Standing::Wins: return "wins";
-        case baker::Standing::Shadowed: return "shadowed";
-        case baker::Standing::Removes: return "removes";
-        case baker::Standing::Disabled: return "disabled";
+        case baker::tools::Standing::Wins: return "wins";
+        case baker::tools::Standing::Shadowed: return "shadowed";
+        case baker::tools::Standing::Removes: return "removes";
+        case baker::tools::Standing::Disabled: return "disabled";
     }
     return "";
 }
@@ -291,7 +292,7 @@ void BakerRuntime::read_arguments() {
             if (a == "--no-local") continue;
             for (++i; i < args.size(); ++i) {
                 const std::string t = to_std(args[i]);
-                if (t == "--out" && i + 1 < args.size())
+                if (t == "--baker-output" && i + 1 < args.size())
                     tool_out_ = to_std(args[++i]);
                 else
                     tool_args_.push_back(t);
@@ -365,7 +366,7 @@ void BakerRuntime::run_tool_command() {
     }
     if (line->write) {
         std::fputs(
-            "baker: a game never writes into the project: promote --patch FILE gives "
+            "baker: a game never writes into the project: promote --baker-patch FILE gives "
             "the change for a person to apply\n",
             stderr);
         return finish_tool(baker::host::kCommandError);
@@ -575,63 +576,10 @@ bool BakerRuntime::hold(std::function<void()> change) {
     return true;
 }
 
-namespace {
-
-// FNV-1a over a tree's structure: each node's type and value, numbers by their bits and
-// text by its bytes, so the same data hashes the same on every platform.
-struct Fingerprint {
-    uint64_t h = 14695981039346656037ull;
-
-    void byte(uint8_t b) { h = (h ^ b) * 1099511628211ull; }
-    void u64(uint64_t v) {
-        for (int i = 0; i < 8; ++i) byte(uint8_t(v >> (8 * i)));
-    }
-    void text(std::string_view t) {
-        u64(t.size());
-        for (char c : t) byte(uint8_t(c));
-    }
-    void node(const baker::Node& n) {
-        byte(uint8_t(n.type()));
-        switch (n.type()) {
-            case baker::Type::Int: u64(uint64_t(n.try_int().value_or(0))); break;
-            case baker::Type::Float: u64(n.float_bits()); break;
-            case baker::Type::Symbol: text(n.try_sym()->str()); break;
-            case baker::Type::String: text(n.string()->view()); break;
-            case baker::Type::Array:
-            case baker::Type::Command:
-            case baker::Type::Property: array(*n.array()); break;
-            case baker::Type::Var: text(n.var_name().str()); break;
-            case baker::Type::Func: text(n.func_record()->name.str()); break;
-            case baker::Type::Object: u64(n.object_handle().bits); break;
-        }
-    }
-    void array(const baker::Array& a) {
-        u64(a.size());
-        for (const baker::Node& n : a) node(n);
-    }
-};
-
-}  // namespace
-
 String BakerRuntime::fingerprint() const {
     if (!config()) return String();
-    Fingerprint f;
-    f.array(*config()->root());
-    // A live edit reaches root() at the next merge only: each is hashed by its path, in
-    // order. Once a merge takes one into root() the fingerprint moves, the data unchanged,
-    // which a match with no live edits never sees (requirement 0019 ends it).
-    std::vector<std::string_view> edits;
-    for (baker::Symbol edit : config()->unsaved()) edits.push_back(edit.str());
-    std::sort(edits.begin(), edits.end());
-    for (std::string_view edit : edits) {
-        f.text(edit);
-        auto r = config()->get<RawValues>(baker::Path(edit), RawValues{});
-        f.u64(r ? r->nodes.size() : 0);
-        if (r)
-            for (const baker::Node& n : r->nodes) f.node(n);
-    }
     char hex[17];
-    std::snprintf(hex, sizeof hex, "%016llx", static_cast<unsigned long long>(f.h));
+    std::snprintf(hex, sizeof hex, "%016llx", static_cast<unsigned long long>(config()->digest()));
     return String(hex);
 }
 
@@ -787,36 +735,8 @@ Variant BakerRuntime::get_value(const String& path, const Variant& fallback) con
         godot::UtilityFunctions::push_warning("Baker: ", to_godot(baker::to_string(r.error())));
         return fallback;
     }
-    const bool table = fallback.get_type() == Variant::DICTIONARY;
-    Variant v = r->nodes.empty() ? Variant() : to_variant(r->values(), fallback.get_type());
-    if (table) v = with_live_edits(path, v);
+    const Variant v = r->nodes.empty() ? Variant() : to_variant(r->values(), fallback.get_type());
     return v.get_type() == Variant::NIL ? fallback : v;
-}
-
-// A table read with the live edits beneath its path laid over it: a live edit updates only
-// its own path until the stack next merges, so a read of a record would miss its tuned
-// fields (requirement 0019).
-Variant BakerRuntime::with_live_edits(const String& path, const Variant& table) const {
-    const String prefix = path.replace(".", "/") + "/";
-    Dictionary out =
-        table.get_type() == Variant::DICTIONARY ? Dictionary(table).duplicate(true) : Dictionary();
-    bool edited = false;
-    for (baker::Symbol edit : config()->unsaved()) {
-        const String at = name_of(edit);
-        if (!at.begins_with(prefix)) continue;
-        auto r = config()->get<RawValues>(baker::Path(to_std(at)), RawValues{});
-        if (!r || r->nodes.empty()) continue;
-        const godot::PackedStringArray keys = at.substr(prefix.length()).split("/");
-        Dictionary level = out;
-        for (int64_t k = 0; k + 1 < keys.size(); ++k) {
-            if (level.get(keys[k], Variant()).get_type() != Variant::DICTIONARY)
-                level[keys[k]] = Dictionary();
-            level = level[keys[k]];
-        }
-        level[keys[keys.size() - 1]] = to_table(r->values());
-        edited = true;
-    }
-    return edited ? Variant(out) : table;
 }
 
 Variant BakerRuntime::tweak(const String& path, const Variant& fallback) {
@@ -836,9 +756,9 @@ Dictionary BakerRuntime::source(const String& path) const {
 Array BakerRuntime::explain(const String& path) const {
     Array out;
     if (!config()) return out;
-    auto entries = config()->explain(baker::Path(to_std(path)));
+    auto entries = baker::tools::explain(*config(), baker::Path(to_std(path)));
     if (!entries) return out;
-    for (const baker::ExplainEntry& e : *entries) {
+    for (const baker::tools::ExplainEntry& e : *entries) {
         Dictionary d;
         put_source(d, e.source);
         d["layer"] = name_of(e.layer);
@@ -939,7 +859,7 @@ godot::Error BakerRuntime::wrote(const baker::WriteReport& report) {
 Array BakerRuntime::layer_effect(const String& layer) const {
     Array out;
     if (!config()) return out;
-    auto entries = config()->layer_effect(to_std(layer));
+    auto entries = baker::tools::layer_effect(*config(), to_std(layer));
     if (!entries) return out;
     for (const baker::LayerEffectEntry& e : *entries) {
         Dictionary d;

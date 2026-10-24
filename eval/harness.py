@@ -6,7 +6,7 @@ the result by the game, not by the agent.
     python3 eval/harness.py --godot PATH [--runs 3] [--jobs 3] [--model M] [--results CSV]
 
 A run succeeds if, afterwards: every file but data/agent.dta (and run output) is byte for
-byte as planted; `--baker check` exits 0; `--baker sim --seeds 1-3` exits 0; and the task's
+byte as planted; `--baker check` exits 0; `--baker sim --baker-seeds 1-3` exits 0; and the task's
 own condition holds. Recorded per run: success and its parts, turns, tool calls, tokens,
 cost, wall time.
 """
@@ -42,9 +42,9 @@ def plant_height(value):
 def fall_gravity(sample, godot):
     """The jump's gravity while falling, as the data now sets it: 2h/t^2 times the multiplier."""
     out = Path(tempfile.mkdtemp()) / "eval.json"
-    run_godot(godot, sample, ["--baker", "eval", "--json", "{config.get player.jump.height}",
+    run_godot(godot, sample, ["--baker", "eval", "--baker-json", "{config.get player.jump.height}",
                               "{config.get player.jump.time_to_peak}",
-                              "{config.get player.jump.fall_multiplier}", "--out", str(out)])
+                              "{config.get player.jump.fall_multiplier}", "--baker-output", str(out)])
     h, t, m = (json.loads(line)["value"] for line in out.read_text().splitlines() if line.strip())
     return 2 * h / (t * t) * m
 
@@ -145,7 +145,7 @@ def run_one(name, index, godot, model, root):
             result = event
     untouched = digest(sample) == planted
     checked = run_godot(godot, sample, ["--baker", "check"]) == 0
-    simulated = run_godot(godot, sample, ["--baker", "sim", "--seeds", "1-3"]) == 0
+    simulated = run_godot(godot, sample, ["--baker", "sim", "--baker-seeds", "1-3"]) == 0
     condition = True
     if task["condition"]:
         try:

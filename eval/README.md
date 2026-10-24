@@ -42,7 +42,7 @@ $0.75. Neither run's rows are in `results.csv`.
 - **Runs:** three per task, three at a time.
 - **Success** is judged afterwards by the game, not the agent: every file but
   `data/agent.dta` (and run output) is byte for byte as planted; `--baker check` exits 0;
-  `--baker sim --seeds 1-3` exits 0; and the task's own condition holds.
+  `--baker sim --baker-seeds 1-3` exits 0; and the task's own condition holds.
 
 ## Results
 

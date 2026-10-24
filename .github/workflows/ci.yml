@@ -78,7 +78,7 @@ jobs:
       - name: Scenario jump
         if: ${{ !cancelled() && steps.import.outcome == 'success' }}
         timeout-minutes: 2
-        run: godot/${{ matrix.godot }} --headless --fixed-fps 60 --path sample -- --baker sim --scenario jump
+        run: godot/${{ matrix.godot }} --headless --fixed-fps 60 --path sample -- --baker sim --baker-scenario jump
       - name: The demonstration, in a headless editor
         if: ${{ !cancelled() && steps.import.outcome == 'success' && !matrix.no_editor_play }}
         timeout-minutes: 5

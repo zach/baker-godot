@@ -1,5 +1,7 @@
 # 0020: The same text for a number on every platform
 
+**Shipped** in Baker 0.6.0; the runtime test's write-back of 120 checks the text on macOS.
+
 ## The need
 
 Baker writes a number (a write-back, a promote, a patch, a value in JSON or the reference)

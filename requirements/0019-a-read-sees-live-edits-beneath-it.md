@@ -1,5 +1,8 @@
 # 0019: A read of a path sees the live edits beneath it
 
+**Shipped** in Baker 0.6.0 (`Config::apply_edits`, and a read of a record or table above
+a live edit sees it); the integration's own overlay of the edits on a table read is gone.
+
 ## The need
 
 A read through a Config of a path that holds a record or a table (`get` of `units.tank`,

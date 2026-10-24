@@ -18,7 +18,7 @@
 //
 // Types: bool, int, float, String, StringName, Vector2, Vector3, Color.
 //
-// The property's export hint is the tweak's metadata, which reference --json gives tools and
+// The property's export hint is the tweak's metadata, which reference --baker-json gives tools and
 // agents, and which check holds the data to: @export_range(min, max, step) its range and step;
 // @export_enum its allowed values (a String's strings, an int's named choices). The data's
 // own (range ...) or (one_of ...) after a value wins, as for any tweak.

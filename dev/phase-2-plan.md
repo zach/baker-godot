@@ -22,9 +22,9 @@ assessed game, or from any other.
 | 2. Tables (G3) | `get_value("units", {})` gives a Dictionary of Dictionaries; shapes, written in the data, check the tables | The production menu and the AI read the table whole; `check` catches a malformed unit record |
 | 3. Runtime layers (G6), and Resources | `push_layer`, `push_layer_text`, `remove_layer` from GDScript; `bind_resource(resource, bindings)`, on the shared tweaks of step 1 (a script's Resource, a shader's parameters) | A content pack found at startup merges into the unit table; removing it restores the base; one path feeds a Resource's value and a shader parameter |
 | 3b. Resource records by class | One declaration per class binds every resource of it: the class, its key (a field, or the file's name), and the `@export_group` that names its tunables, so the data holds only what a layer changes and the Resource is the bottom layer; a field referencing another resource is a key, resolved through the same registry, whose keys are its `one_of`; a Curve as a list of points; a bound Resource property changed from the remote inspector is a live edit | A directory of record resources binds by one declaration, and `explain` names the Resource beneath the layers; a layer retunes a reference by key, and `check` refuses an unknown key; a Curve binds and writes back; an exported game lists a directory of records, or the export plugin bakes the list |
-| 4. Lockstep (G5), and a reload at the frame | A fingerprint of the effective data (the integration's own hash until Baker's digest, note 0017) and a lock for a match, built on the Config's freeze if it serves; a reload's assignments staged and published together at the start of a frame | Two peers with different `local` layers refuse a match; a toggle during a match waits for the turn boundary; no frame sees half a reload |
+| 4. Lockstep (G5), and a reload at the frame | A fingerprint of the effective data (Baker's digest, note 0017) and a lock for a match, built on the Config's freeze if it serves; a reload's assignments staged and published together at the start of a frame | Two peers with different `local` layers refuse a match; a toggle during a match waits for the turn boundary; no frame sees half a reload |
 | 5. Rules in script (G4) | `Baker.call(name, args)` and `Baker.eval(text)` returning Godot values; a rules pack (level bonus, damage) in Baker script | An experiment layer changes a rule, not only a number, and `sim` sees it |
-| 6. Turn scenarios (G7) | The game reports a step per turn under `--step-hz 1`; objectives on outcomes | "The HQ affords a tank by turn 3", repeatable over seeds, and `compare` on a balance change |
+| 6. Turn scenarios (G7) | The game reports a step per turn under `--baker-step-hz 1`; objectives on outcomes | "The HQ affords a tank by turn 3", repeatable over seeds, and `compare` on a balance change |
 | 7. A data view in the dock (G9) | Every path, grouped by prefix, with its value and layer chain, whichever scene is open; presets of layer toggles to play with, sent to the launched game; the reference as CSV (path, value, range, layer) for a designer's spreadsheet | `tests/e2e.sh` |
 | 8. Harder agent evaluation | Balance tasks with objectives in tension, on the new sample | `eval/` says where agents struggle |
 
@@ -48,13 +48,14 @@ content; emitting shapes from a GDScript class, until hand-written shapes prove 
   hit points from the maximum) re-derives on `property_changed`.
 - **The match lock is the integration's own, not the Config's freeze.** Baker's `freeze()`
   is one way and refuses changes; a match needs them held, in order, and applied at a turn's
-  boundary. The fingerprint is FNV-1a over the merged tree's structure (numbers by their
-  bits, text by its bytes) and each live edit by its path, until Baker's digest (0017).
+  boundary. The fingerprint is Baker's `Config::digest()` (0017, in Baker 0.6.0), as
+  sixteen hex digits.
 - **A reload lands at the frame's start:** the live loop runs from the scene tree's
   `physics_frame`, or its `process_frame` when a frame has no physics step, never from a
   node's step.
-- **Step 6 starts on today's Baker** (a turn as one step at a rate of one); note 0018 (a run
-  that ends on a condition, in the host's own steps) replaces the convention when it ships.
+- **Step 6 uses Baker 0.6.0's steps:** a turn is one step of the game's own,
+  `(steps N)` and `(at step N ...)`, and `(until {command})` ends a run on the board's state
+  (note 0018).
 
 ## After phase 2
 
@@ -67,5 +68,6 @@ content; emitting shapes from a GDScript class, until hand-written shapes prove 
 
 ## With Baker
 
-- 0017, a digest of the data a Config holds, for step 4.
-- 0018, a scenario that ends on a condition, for step 6.
+- 0017 (a digest, step 4) and 0018 (a scenario that ends on a condition, step 6) shipped in
+  Baker 0.6.0, with 0019 and 0020. Its `LoadSession::Lister` (directories of layers, and
+  `#include_dir`, over Godot's file access) and curves as values serve step 3b.
