@@ -11,12 +11,15 @@
 #include <baker/std_script.hpp>
 #include <baker/tools/layers.hpp>
 
+#include <godot_cpp/classes/dir_access.hpp>
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/engine_debugger.hpp>
 #include <godot_cpp/classes/file_access.hpp>
 #include <godot_cpp/classes/os.hpp>
 #include <godot_cpp/classes/rendering_server.hpp>
+#include <godot_cpp/classes/resource_loader.hpp>
 #include <godot_cpp/classes/scene_tree.hpp>
+#include <godot_cpp/classes/script.hpp>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/callable_method_pointer.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
@@ -106,6 +109,11 @@ void BakerRuntime::_bind_methods() {
     ClassDB::bind_method(D_METHOD("bind_resource", "resource", "bindings"),
                          &BakerRuntime::bind_resource);
     ClassDB::bind_method(D_METHOD("unbind_resource", "resource"), &BakerRuntime::unbind_resource);
+    ClassDB::bind_method(D_METHOD("bind_records", "prefix", "dir", "options"),
+                         &BakerRuntime::bind_records, DEFVAL(Dictionary()));
+    ClassDB::bind_method(D_METHOD("unbind_records", "prefix"), &BakerRuntime::unbind_records);
+    ClassDB::bind_method(D_METHOD("record", "prefix", "key"), &BakerRuntime::record);
+    ClassDB::bind_method(D_METHOD("records", "prefix"), &BakerRuntime::records);
     ClassDB::bind_method(D_METHOD("reload"), &BakerRuntime::reload);
     ClassDB::bind_method(D_METHOD("fingerprint"), &BakerRuntime::fingerprint);
     ClassDB::bind_method(D_METHOD("lock"), &BakerRuntime::lock);
@@ -764,6 +772,107 @@ void BakerRuntime::unbind_resource(const godot::Ref<godot::Resource>& resource) 
     }
 }
 
+namespace {
+
+// The properties under a script's @export_group `group`, which a record's binding binds.
+godot::PackedStringArray grouped(const godot::Object& o, const String& group) {
+    godot::PackedStringArray out;
+    bool in = false;
+    for (const Variant& p : o.get_property_list()) {
+        const Dictionary info = p;
+        const int64_t usage = info.get("usage", 0);
+        if (usage & godot::PROPERTY_USAGE_CATEGORY) {
+            in = false;
+        } else if (usage & godot::PROPERTY_USAGE_GROUP) {
+            in = String(info["name"]) == group;
+        } else if (in && !(usage & godot::PROPERTY_USAGE_SUBGROUP) &&
+                   (usage & godot::PROPERTY_USAGE_STORAGE) &&
+                   (usage & godot::PROPERTY_USAGE_EDITOR)) {
+            out.push_back(info["name"]);
+        }
+    }
+    return out;
+}
+
+}  // namespace
+
+int64_t BakerRuntime::bind_records(const String& prefix, const String& dir,
+                                   const Dictionary& options) {
+    unbind_records(prefix);
+    if (!godot::DirAccess::dir_exists_absolute(dir)) {
+        last_error_ = "Baker: no directory " + dir;
+        godot::UtilityFunctions::push_error(last_error_);
+        return 0;
+    }
+    const String key_field = options.get("key", "");
+    const String group = options.get("group", "Tuning");
+    // An export lists a resource it converted as NAME.remap; the loader follows it.
+    godot::PackedStringArray files = godot::DirAccess::get_files_at(dir);
+    files.sort();
+    Dictionary table;
+    for (String file : files) {
+        if (file.ends_with(".remap")) file = file.trim_suffix(".remap");
+        if (!file.ends_with(".tres") && !file.ends_with(".res")) continue;
+        const godot::Ref<godot::Resource> r =
+            godot::ResourceLoader::get_singleton()->load(dir.path_join(file));
+        if (r.is_null()) continue;
+        const String key = key_field.is_empty() ? file.get_basename() : String(r->get(key_field));
+        if (key.is_empty()) {
+            godot::UtilityFunctions::push_warning("Baker: ", dir.path_join(file), " has no ",
+                                                  key_field, " to key it by");
+            continue;
+        }
+        table[key] = r;
+        const godot::Ref<godot::Script> script = r->get_script();
+        if (script.is_valid() && !script->get_global_name().is_empty())
+            record_tables_[String(script->get_global_name())] = prefix;
+    }
+    // Every record is known before any binds, so a reference to one of its own table binds.
+    records_[prefix] = table;
+    const Array keys = table.keys();
+    for (int64_t i = 0; i < keys.size(); ++i) {
+        const godot::Ref<godot::Resource> r = table[keys[i]];
+        Dictionary bindings;
+        for (const String& property : grouped(*r.ptr(), group))
+            bindings[property] = prefix + String(".") + String(keys[i]) + String(".") + property;
+        (void)bind_resource(r, bindings);
+    }
+    return keys.size();
+}
+
+void BakerRuntime::unbind_records(const String& prefix) {
+    if (!records_.has(prefix)) return;
+    const Dictionary table = records_[prefix];
+    records_.erase(prefix);
+    const Array values = table.values();
+    for (int64_t i = 0; i < values.size(); ++i) unbind_resource(values[i]);
+    const Array classes = record_tables_.keys();
+    for (int64_t i = 0; i < classes.size(); ++i)
+        if (String(record_tables_[classes[i]]) == prefix) record_tables_.erase(classes[i]);
+}
+
+godot::Ref<godot::Resource> BakerRuntime::record(const String& prefix, const String& key) const {
+    if (!records_.has(prefix)) return {};
+    return Dictionary(records_[prefix]).get(key, Variant());
+}
+
+Dictionary BakerRuntime::records(const String& prefix) const {
+    return records_.has(prefix) ? Dictionary(records_[prefix]).duplicate() : Dictionary();
+}
+
+String BakerRuntime::record_table(const String& class_name) const {
+    return record_tables_.get(class_name, String());
+}
+
+String BakerRuntime::record_key(const String& prefix, const godot::Object* resource) const {
+    if (!resource || !records_.has(prefix)) return {};
+    const Dictionary table = records_[prefix];
+    const Array keys = table.keys();
+    for (int64_t i = 0; i < keys.size(); ++i)
+        if (const godot::Object* o = table[keys[i]]; o && o == resource) return keys[i];
+    return {};
+}
+
 godot::Error BakerRuntime::set_layer_enabled(const String& layer, bool enabled) {
     if (!config()) return godot::ERR_UNCONFIGURED;
     if (hold([=, this] { (void)set_layer_enabled(layer, enabled); })) return godot::OK;
@@ -821,6 +930,10 @@ Array BakerRuntime::explain(const String& path) const {
         d["layer"] = name_of(e.layer);
         d["value"] = to_variant(e.value);
         d["standing"] = standing_name(e.standing);
+        // The code's value of a record's property is its resource's.
+        if (e.layer.str() == "code")
+            if (const String resource = BakerBinding::resource_of(path); !resource.is_empty())
+                d["resource"] = resource;
         out.push_back(d);
     }
     return out;

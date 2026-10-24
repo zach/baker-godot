@@ -261,6 +261,41 @@ func run() -> void:
 	check(BakerBinding.shared_tweak_count() == tweaks_before,
 		"the units gone, their tweaks go: %d left" % [BakerBinding.shared_tweak_count()])
 
+	# Records: resources a file each, bound by one call, the data holding what it changes.
+	check(Baker.bind_records("cards", "res://skirmish/cards") == 3, "bind_records: three cards")
+	var strike: SkirmishCard = Baker.record("cards", "strike")
+	var bash: SkirmishCard = Baker.record("cards", "bash")
+	var fireball: SkirmishCard = Baker.record("cards", "fireball")
+	check(strike == load("res://skirmish/cards/strike.tres"), "  the game's own loaded resource")
+	check(fireball.cost == 2 and strike.cost == 1 and strike.title == "Strike",
+		"  a field the data changes reads the data; the rest, and what is not tuning, the file")
+	var card_chain: Array = Baker.explain("cards.strike.cost")
+	check(card_chain.size() == 1 and card_chain[0]["resource"] == "res://skirmish/cards/strike.tres",
+		"  explain() names the resource beneath the layers: %s" % [card_chain])
+	check(strike.upgrade == bash, "  a reference to a card is the card")
+	Baker.set_value("cards.strike.upgrade", &"fireball")
+	check(strike.upgrade == fireball, "  retuned by the other card's name")
+	Baker.clear_scratch()
+	check(strike.upgrade == bash, "  and back to the file's")
+	check(is_equal_approx(strike.scaling.sample(2.0), 1.5), "a Curve binds: the file's line, 1.5 at 2")
+	Baker.set_value("cards.strike.scaling", [[1, 1], [3, 5], [5, 6]])
+	var baker_at := float(Baker.eval("{curve.sample cards.strike.scaling 2}"))
+	check(strike.scaling.sample(3.0) == 5.0 and absf(strike.scaling.sample(2.0) - baker_at) < 0.01,
+		"  set as points, Godot samples it as Baker does: %.3f, %.3f" % [strike.scaling.sample(2.0), baker_at])
+	Baker.clear_scratch()
+	check(is_equal_approx(strike.scaling.sample(2.0), 1.5), "  and the file's curve is back")
+	var card_binding: BakerBinding = Baker.get_node("Resource%d" % strike.get_instance_id())
+	strike.damage = 9
+	strike.upgrade = fireball
+	card_binding.capture()
+	check(Baker.unsaved().has("cards/strike/damage") and Baker.get_value("cards.strike.upgrade", &"") == &"fireball",
+		"a resource changed from outside is a live edit, a reference as its card's name: %s" % [Baker.unsaved()])
+	Baker.clear_scratch()
+	check(strike.damage == 6 and strike.upgrade == bash, "  discarded, the file's values")
+	Baker.unbind_records("cards")
+	check(Baker.record("cards", "strike") == null and BakerBinding.resource_of("cards.strike.cost") == "",
+		"unbind_records: the cards' tweaks go")
+
 	# Rules in Baker's script: the data defines them, the game calls them.
 	check(Baker.call_function("skirmish.damage", [6, 2, 0]) == 4,
 		"call_function: a rule the data defines, with Godot values: 4")

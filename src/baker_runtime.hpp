@@ -107,6 +107,26 @@ public:
     class BakerBinding* bind_resource(const godot::Ref<godot::Resource>& resource,
                                       const godot::Dictionary& bindings);
     void unbind_resource(const godot::Ref<godot::Resource>& resource);
+    // Binds every resource in `dir` (.tres, .res) as a record of the table `prefix`: the
+    // properties under its script's @export_group `group` (default "Tuning") bind to
+    // "prefix.KEY.property", where KEY is the file's name, or the field `key` names. The
+    // data holds only what a layer changes; the resource's own value is the bottom of the
+    // chain, and explain() names it. A property that holds a resource of a class bound as
+    // records is a key in the data, its tweak's one_of the table's keys: a layer retunes a
+    // reference by naming another record. A Curve is its points. Binding a prefix again
+    // replaces it; the number of records bound.
+    int64_t bind_records(const godot::String& prefix, const godot::String& dir,
+                         const godot::Dictionary& options);
+    void unbind_records(const godot::String& prefix);
+    // A record by its key, or null; every record of a table, {key: resource}.
+    [[nodiscard]] godot::Ref<godot::Resource> record(const godot::String& prefix,
+                                                     const godot::String& key) const;
+    [[nodiscard]] godot::Dictionary records(const godot::String& prefix) const;
+    // The table whose records are of `class_name` (a script's global name), or empty.
+    [[nodiscard]] godot::String record_table(const godot::String& class_name) const;
+    // A record's key in its table, or empty.
+    [[nodiscard]] godot::String record_key(const godot::String& prefix,
+                                           const godot::Object* resource) const;
     // Re-reads the files that changed; true if anything did.
     bool reload();
 
@@ -249,6 +269,8 @@ private:
     bool locked_ = false;
     std::vector<std::function<void()>> held_;  // what waits for apply_held()
     godot::Array last_written_;
+    godot::Dictionary records_;        // bind_records: prefix -> {key: resource}
+    godot::Dictionary record_tables_;  // a record's script class -> its prefix
 
     // Live binds the Config's tools into the Context, which outlives it.
     std::unique_ptr<baker::Context> context_;

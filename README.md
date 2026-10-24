@@ -63,6 +63,16 @@ the remote inspector sends, and checks the diff.
   Resource's properties as a `BakerBinding` binds a node's, with the same shared tweaks; a
   shader's parameters are a `ShaderMaterial`'s (`"shader_parameter/glow"`), so one path
   can feed a script's value and a shader. It returns the binding; `unbind_resource` ends it.
+- **Records that are resources.** For a game whose content is the engine's own resources,
+  a file a card, Baker is the layers above them: `Baker.bind_records("cards",
+  "res://skirmish/cards")` binds every resource in the directory, the properties under its
+  script's `@export_group("Tuning")` (or the group `{"group": ...}` names) to
+  `cards.<file>.<property>` (or the field `{"key": ...}` names). The data holds only what a
+  layer changes; the file is the bottom of the chain, and `explain()` names it. A property
+  that references a resource of a class bound as records is the record's name in the data,
+  checked against the table's names; a `Curve` is its points, `(scaling (1 1) (3 2))`, and
+  Godot samples it as Baker does. `record(prefix, key)` and `records(prefix)` give the
+  resources; an exported game lists the directory from its package.
 - **Rules in Baker's script.** A rule is a script function the data defines in a layer's
   `#autorun`, so a layer above changes it by defining it again: an experiment, an agent's
   proposal, a mod. The game calls it with `Baker.call_function("skirmish.damage", [6, 2,

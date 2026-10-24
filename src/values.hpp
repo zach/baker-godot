@@ -8,6 +8,10 @@
 // BakerBinding's property is a Tweak<T> of its own type.
 
 #include <baker/array.hpp>
+#include <baker/curve.hpp>
+
+#include <godot_cpp/classes/curve.hpp>
+#include <godot_cpp/classes/ref.hpp>
 
 #include <godot_cpp/variant/color.hpp>
 #include <godot_cpp/variant/string.hpp>
@@ -103,10 +107,23 @@ struct RawValues {
 // records ((wave (n 3)) (wave (n 5)): [{"n": 3}, {"n": 5}]). Metadata after a value, such as
 // (range ...), is left out, as a tweak leaves it.
 [[nodiscard]] godot::Variant to_table(const baker::Values& values);
-// `value` as data: false for a type data cannot hold. An Array is a value of several
-// nodes; a Dictionary is a table, each entry an array tagged by its key, the reverse of
-// to_table (an Array of Dictionaries writes each as an untagged array of its entries).
+// `value` as data: false for a type data cannot hold. A Curve is its points (curve_points). An
+// Array is a value of several nodes; a Dictionary is a table, each entry an array tagged by its
+// key, the reverse of to_table (an Array of Dictionaries writes each as an untagged array of its
+// entries).
 [[nodiscard]] bool to_values(const godot::Variant& value, baker::ValueList& out);
+
+// A Godot Curve's points as a curve's, each tangent as its slope (dy/dx, which is how
+// Godot samples one): Linear and no slopes when every side of every point is linear, else
+// each point with its in and out slopes.
+void curve_points(const godot::Curve& curve, std::vector<baker::CurvePoint>& points,
+                  baker::CurveMode& mode);
+// A curve as a Godot Curve, its domain and value range opened to hold its points. Godot
+// samples a cubic between points with their slopes, as Baker's monotone and catmull-rom do,
+// so each point takes the slopes Baker's curve has there; a linear curve's points are
+// linear. Godot has no `constant` curve, and clamps beyond the ends: `warning` says so.
+[[nodiscard]] godot::Ref<godot::Curve> to_godot_curve(const baker::Curve& curve,
+                                                      godot::String& warning);
 
 [[nodiscard]] godot::String to_godot(std::string_view text);
 [[nodiscard]] std::string to_std(const godot::String& text);

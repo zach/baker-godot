@@ -46,6 +46,8 @@ assert d["schema"] == "baker.sim/1.3" and d["status"] == "passed", d
 assert abs(d["runs"][0]["objectives"][0]["value"] - 96) <= 2, d
 PY
 check $? "  tuning.dta's values read from the package, without local or agent.dta"
+timeout 60 "$game" --headless --fixed-fps 60 -- --baker sim --baker-scenario cards >/dev/null 2>&1
+check $? "  the cards, listed from the package and bound, read the data's change"
 timeout 60 "$game" --headless -- --baker check >/dev/null 2>&1; [ $? -eq 2 ]
 check $? "  a shipping build: it runs sim and compare, and refuses check"
 pck="${game%.*}.pck"  # the export plugin leaves dev_only layers' files out of the package

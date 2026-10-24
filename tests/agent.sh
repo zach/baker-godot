@@ -91,6 +91,14 @@ check $? "    with a warning that names it"
 
 # The skirmish's tables are held to their shapes: a record with a field of the wrong type,
 # out of range, or missing fails check; a field no shape declares is a warning.
+# The cards are resources: their tunables are tweaks, a reference's allowed values the
+# cards' names, and a curve held to being one.
+bad '(cards (strike (upgrade bsh)))' card1.json; [ $? -eq 1 ]; check $? "a card's reference to no card fails check"
+json card1.json '[(e["file"], e["line"]) for e in d["tweak_errors"]] == [("data/agent.dta", 1)]'
+check $? "  located in agent.dta"
+bad '(cards (strike (scaling (3 1) (1 2))))' card2.json; [ $? -eq 1 ]; check $? "  so does a curve whose x goes back"
+bad '(cards (strike (upgrade fireball) (scaling (1 1) (2 4) (3 9)) (cost 0)))' card3.json
+check $? "  another card, a new curve and a cost pass"
 bad '(units (tank (hp "ten")))' shape1.json; [ $? -eq 1 ]; check $? "a unit's field of the wrong type fails check"
 json shape1.json '[(e["file"], e["line"]) for e in d["shape_errors"]] == [("data/agent.dta", 1)]'
 check $? "  located in agent.dta"
@@ -134,9 +142,9 @@ sim before; status=$?
 [ "$status" -eq 1 ]; check $? "the baseline: reach fails on the shipped data (sim exits 1)"
 json before/results.json 'd["schema"] == "baker.sim/1.3" and d["status"] == "failed"'
 check $? "  as baker.sim/1.3 results"
-json before/results.json '[(r["scenario"], r["seed"]) for r in d["runs"]] == [(n, s) for n in ("duel", "jump", "reach") for s in (1, 2, 3)]'
+json before/results.json '[(r["scenario"], r["seed"]) for r in d["runs"]] == [(n, s) for n in ("cards", "duel", "jump", "reach") for s in (1, 2, 3)]'
 check $? "  every scenario, each seed a run of its own"
-json before/results.json '[o["value"] for r in d["runs"] if r["scenario"] != "duel" for o in r["objectives"]] == [96.06] * 9'
+json before/results.json '[o["value"] for r in d["runs"] if r["scenario"] in ("jump", "reach") for o in r["objectives"]] == [96.06] * 9'
 check $? "  the same apex in every run: 96.06"
 tool layers.json eval --baker-json "{config.layers}"
 json layers.json '[l["layer"] for l in d["value"]] == ["default", "agent", "floaty", "piercing", "scratch"]'
@@ -158,7 +166,7 @@ rm "$work/sim/scenarios/typo.dta"
 printf '(player (jump (height 200)))\n' > "$work/data/agent.dta"
 sim over; compare before over over.json; status=$?
 [ "$status" -eq 1 ]; check $? "a jump of 200: compare exits 1"
-json over.json 'd["schema"] == "baker.compare/1" and d["broke"] == 1 and {o["name"]: o["moved"] for o in d["objectives"]} == {"duel.tank_holds": "same", "jump.apex": "same", "reach.first_platform": "fixed", "reach.not_second_platform": "broke"}'
+json over.json 'd["schema"] == "baker.compare/1" and d["broke"] == 1 and {o["name"]: o["moved"] for o in d["objectives"]} == {"cards.fireball_cost": "same", "cards.strike_upgrades": "same", "duel.tank_holds": "same", "jump.apex": "same", "reach.first_platform": "fixed", "reach.not_second_platform": "broke"}'
 check $? "  it fixed the first platform and broke the second: not done"
 printf '; The agent: a higher jump, to clear the first platform.\n(player (jump (height 120)))\n' \
     > "$work/data/agent.dta"

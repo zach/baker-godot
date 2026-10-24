@@ -79,11 +79,15 @@ random number: the same data and scenario give the same result on every seed.
   jump's height and time to peak: changing the time changes the gravity, not the height.
 - **Scenarios:** `jump` (one held jump peaks at `player.jump.height`, within 2 px),
   `reach` (a jump from the floor clears the first platform, 100 px up, with 10 px to spare,
-  and stays 20 px below the second, 180 px up: the climb takes two jumps), and `duel`
-  (infantry takes at least 3 hits to destroy a tank).
+  and stays 20 px below the second, 180 px up: the climb takes two jumps), `duel`
+  (infantry takes at least 3 hits to destroy a tank), and `cards` (the cards read the data).
 - **Rules:** the skirmish's damage is a script function in `data/skirmish.dta`, defined in
   its `#autorun`. To change a rule rather than a number, define it again in `agent.dta`'s
   own `#autorun`, whole, with its `(doc ...)`; `sim` judges it as it judges a value.
+- **Cards:** each card is a resource, `sample/skirmish/cards/NAME.tres` (read them; never
+  edit them). Its tuning is `cards.NAME.cost`, `damage`, `upgrade` (another card's name) and
+  `scaling` (a curve, `(scaling (1 1) (3 2))`): `reference --baker-json` lists each with its
+  file's value. Retune a card in `agent.dta` by name, as any value.
 - **Experiments:** `floaty` and `piercing` (in `data/experiments/`) are a person's A/B, off
   by default. Do not tune them unless asked; a scenario runs with them off.
 

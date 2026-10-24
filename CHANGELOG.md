@@ -44,6 +44,13 @@ On Baker 0.6.0.
 - **`bind_resource(resource, bindings)`** binds a Resource's properties on the shared
   tweaks, a shader's parameters among them; a property that holds nothing yet binds as
   the type it declares.
+- **Records that are resources.** `bind_records(prefix, dir, {key, group})` binds every
+  resource of a directory by its `@export_group("Tuning")` properties, one record a file,
+  in exports too; `record`, `records`, `unbind_records`. A property referencing a record is
+  its key, checked against the table; a `Curve` binds as Baker's curve, and sets and writes
+  back as its points. A bound Resource changed from outside is a live edit, as a node is;
+  `explain()` names the resource beneath the layers. The sample's cards
+  (`skirmish/cards/*.tres`), and a `cards` scenario run in the export test.
 - **Rules in Baker's script.** `call_function(name, args)` calls a script function with
   Godot values, and `eval(text)` evaluates script text; both return Godot values, in a tool
   command's or `sim`'s Context while one runs. A rule the data defines in a layer's

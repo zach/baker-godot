@@ -1,0 +1,5 @@
+; The cards, read from their resources through the data: in an exported game too, where
+; they are listed from the package.
+(scenario cards (desc "Every card binds, and the data's change reaches its resource")
+   (steps 1)
+   (objectives cards.fireball_cost cards.strike_upgrades))

@@ -24,6 +24,9 @@ func _ready() -> void:
 	_show_layers()
 	add_child(preload("res://sim/driver.gd").new())
 	Baker.bind_function("skirmish.hits", SkirmishRules.hits_to_kill)
+	# The skirmish's cards are resources, one a file; the data holds what a layer changes.
+	Baker.bind_records("cards", "res://skirmish/cards")
+	Baker.bind_function("skirmish.card", _card_field)
 	if Baker.is_simulating():
 		Baker.sim_ready.call_deferred()
 
@@ -54,3 +57,15 @@ func _add_platform(rect: Rect2) -> void:
 	look.color = Color(0.25, 0.3, 0.4)
 	body.add_child(look)
 	add_child(body)
+
+
+## {skirmish.card strike cost}: a card's field as the game reads it from its resource (a
+## reference as the card's key), for scenarios and the console.
+func _card_field(key: StringName, field: StringName) -> Variant:
+	var card: SkirmishCard = Baker.record("cards", key)
+	if card == null:
+		return null
+	var value: Variant = card.get(field)
+	if value is SkirmishCard:
+		return StringName(Baker.records("cards").find_key(value))
+	return value

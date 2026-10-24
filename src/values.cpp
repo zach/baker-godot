@@ -179,6 +179,15 @@ bool to_values(const Variant& value, baker::ValueList& out) {
             }
             return !a.is_empty();
         }
+        case Variant::OBJECT: {
+            const auto* curve = godot::Object::cast_to<godot::Curve>(value);
+            if (!curve || curve->get_point_count() == 0) return false;
+            std::vector<baker::CurvePoint> points;
+            baker::CurveMode mode = baker::CurveMode::Monotone;
+            curve_points(*curve, points, mode);
+            baker::Convert<baker::Curve>::to(baker::Curve(points, mode), out);
+            return true;
+        }
         case Variant::DICTIONARY: {
             // A table: each entry an array tagged by its key, its value after the tag.
             const godot::Dictionary d = value;
@@ -198,6 +207,70 @@ bool to_values(const Variant& value, baker::ValueList& out) {
         }
         default: return false;
     }
+}
+
+void curve_points(const godot::Curve& curve, std::vector<baker::CurvePoint>& points,
+                  baker::CurveMode& mode) {
+    const int64_t n = curve.get_point_count();
+    bool linear = true;
+    for (int64_t i = 0; i < n; ++i)
+        linear = linear && curve.get_point_left_mode(i) == godot::Curve::TANGENT_LINEAR &&
+                 curve.get_point_right_mode(i) == godot::Curve::TANGENT_LINEAR;
+    mode = linear ? baker::CurveMode::Linear : baker::CurveMode::Monotone;
+    points.clear();
+    for (int64_t i = 0; i < n; ++i) {
+        const godot::Vector2 p = curve.get_point_position(i);
+        baker::CurvePoint point{.x = p.x, .y = p.y};
+        if (!linear) {
+            point.in = curve.get_point_left_tangent(i);
+            point.out = curve.get_point_right_tangent(i);
+            point.sloped = true;
+        }
+        points.push_back(point);
+    }
+}
+
+godot::Ref<godot::Curve> to_godot_curve(const baker::Curve& curve, godot::String& warning) {
+    godot::Ref<godot::Curve> out;
+    out.instantiate();
+    if (curve.empty()) return out;
+    const size_t n = curve.size();
+    double x0 = curve.point(0).x, x1 = curve.point(n - 1).x;
+    double y0 = curve.point(0).y, y1 = y0;
+    for (size_t i = 0; i < n; ++i) {
+        y0 = std::min(y0, curve.point(i).y);
+        y1 = std::max(y1, curve.point(i).y);
+    }
+    if (x1 <= x0) x1 = x0 + 1;
+    if (y1 <= y0) y1 = y0 + 1;
+    // Widen before narrowing: Godot keeps min below max at every step.
+    out->set_max_domain(std::max(x1, double(out->get_max_domain())));
+    out->set_min_domain(x0);
+    out->set_max_domain(x1);
+    out->set_max_value(std::max(y1, double(out->get_max_value())));
+    out->set_min_value(y0);
+    out->set_max_value(y1);
+    if (curve.mode() == baker::CurveMode::Constant)
+        warning = "a constant curve is linear in Godot, which has no steps";
+    else if (curve.extend() != baker::CurveExtend::Clamp)
+        warning = "Godot clamps a curve beyond its ends";
+    if (curve.mode() == baker::CurveMode::Linear || curve.mode() == baker::CurveMode::Constant) {
+        for (size_t i = 0; i < n; ++i)
+            out->add_point(godot::Vector2(float(curve.point(i).x), float(curve.point(i).y)), 0, 0,
+                           godot::Curve::TANGENT_LINEAR, godot::Curve::TANGENT_LINEAR);
+        return out;
+    }
+    // Each side's slope: the point's own, else Baker's, from the curve's samples beside it.
+    const double h = (x1 - x0) * 1e-6;
+    for (size_t i = 0; i < n; ++i) {
+        const baker::CurvePoint p = curve.point(i);
+        const double at = curve.sample(p.x);
+        const double in = p.sloped ? p.in : (at - curve.sample(p.x - h)) / h;
+        const double slope_out = p.sloped ? p.out : (curve.sample(p.x + h) - at) / h;
+        out->add_point(godot::Vector2(float(p.x), float(p.y)), float(i == 0 ? slope_out : in),
+                       float(i + 1 == n ? in : slope_out));
+    }
+    return out;
 }
 
 }  // namespace baker_godot

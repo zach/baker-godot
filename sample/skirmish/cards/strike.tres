@@ -1,0 +1,19 @@
+[gd_resource type="Resource" script_class="SkirmishCard" load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://skirmish/card.gd" id="1"]
+[ext_resource type="Resource" path="res://skirmish/cards/bash.tres" id="2"]
+
+[sub_resource type="Curve" id="Curve_strike"]
+max_domain = 3.0
+max_value = 2.0
+_data = [Vector2(1, 1), 0.0, 0.0, 1, 1, Vector2(3, 2), 0.0, 0.0, 1, 1]
+point_count = 2
+
+[resource]
+script = ExtResource("1")
+title = "Strike"
+text = "Deal damage."
+cost = 1
+damage = 6
+upgrade = ExtResource("2")
+scaling = SubResource("Curve_strike")

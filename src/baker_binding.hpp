@@ -16,7 +16,8 @@
 // A path may take a key from the node: "units.{kind}.hp" reads the node's `kind` when it
 // binds, so one binding in a base scene serves every scene that inherits it.
 //
-// Types: bool, int, float, String, StringName, Vector2, Vector3, Color.
+// Types: bool, int, float, String, StringName, Vector2, Vector3, Color; a Curve, as its
+// points; and a reference to a record (Baker.bind_records), as the record's key.
 //
 // The property's export hint is the tweak's metadata, which reference --baker-json gives tools and
 // agents, and which check holds the data to: @export_range(min, max, step) its range and step;
@@ -72,6 +73,9 @@ public:
     struct Use;
     // How many paths are bound, each one tweak however many nodes bind it.
     [[nodiscard]] static int64_t shared_tweak_count();
+    // The file of the resource whose property binds `path`, or empty: the bottom of the
+    // path's chain, beneath the layers.
+    [[nodiscard]] static godot::String resource_of(const godot::String& path);
 
 protected:
     static void _bind_methods();

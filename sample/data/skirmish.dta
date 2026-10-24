@@ -24,6 +24,12 @@
    {do (($hit {- {+ $attack {* $level {config.get rules.level_bonus}}} $armor}))
       {if {< $hit 1} 1 $hit}}}
 
+; The cards are resources, one a file (skirmish/cards/*.tres): each file holds a card's own
+; values, and the data only what it changes, by the card's name. A reference to another card
+; is its name; the scaling curve is points (level multiplier).
+(cards
+   (fireball (cost 2)))
+
 ; The AI's opening: what it builds first, in order.
 (ai
    (opening (build infantry) (build infantry) (build tank)))

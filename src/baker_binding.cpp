@@ -8,6 +8,7 @@
 
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/engine_debugger.hpp>
+#include <godot_cpp/classes/resource.hpp>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/variant/utility_functions.hpp>
 
@@ -33,7 +34,9 @@ struct BakerBinding::Use {
     godot::Variant scene;  // its own value from the scene, while the data lacks the path
     struct Shared* shared = nullptr;
 
-    void assign(const Variant& value) {
+    // Sets the property to the data's value, as the property holds it.
+    void assign(const Variant& value);
+    void assign_held(const Variant& value) {
         last = value;
         target->set(property, value);
         binding->emit_signal("property_changed", property);
@@ -68,6 +71,24 @@ struct TweakAs<baker::Symbol> final : Tweaked {
         return godot::StringName(to_godot(t.value().str()));
     }
     baker::Tweak<baker::Symbol> t;
+};
+
+// A curve: Godot's Curve on the property, Baker's points in the data.
+struct CurveTweak final : Tweaked {
+    CurveTweak(baker::Symbol path, std::vector<baker::CurvePoint> defaults, baker::CurveMode mode,
+               const baker::TweakMeta& meta)
+        : points(std::move(defaults)), t(path, baker::Curve(points, mode), meta) {}
+    [[nodiscard]] baker::TweakBase& tweak() override { return t; }
+    [[nodiscard]] Variant value() const override {
+        String warning;
+        const godot::Ref<godot::Curve> curve = to_godot_curve(t.value(), warning);
+        if (!warning.is_empty())
+            godot::UtilityFunctions::push_warning("BakerBinding: ", to_godot(t.path()), ": ",
+                                                  warning);
+        return curve;
+    }
+    std::vector<baker::CurvePoint> points;  // the default's: first, as the tweak views them
+    baker::Tweak<baker::Curve> t;
 };
 
 // A tweak whose default is the first binder's value from its scene.
@@ -175,7 +196,26 @@ struct Shared {
     std::unique_ptr<Tweaked> tweaked;
     Variant::Type type = Variant::NIL;
     std::vector<BakerBinding::Use*> uses;
+    String table;  // a reference to a record of this table: the data holds its key
+
+    // The data's value as the property holds it: a key as its record.
+    [[nodiscard]] Variant to_property(const Variant& v) const {
+        if (table.is_empty()) return v;
+        const BakerRuntime* runtime = BakerRuntime::get_singleton();
+        return runtime ? Variant(runtime->record(table, String(v))) : Variant();
+    }
+    // The property's value as data: a record as its key.
+    [[nodiscard]] Variant from_property(const Variant& v) const {
+        if (table.is_empty()) return v;
+        const BakerRuntime* runtime = BakerRuntime::get_singleton();
+        const String key = runtime ? runtime->record_key(table, v) : String();
+        return godot::StringName(key);
+    }
 };
+
+void BakerBinding::Use::assign(const Variant& value) {
+    assign_held(shared->to_property(value));
+}
 
 namespace {
 
@@ -205,6 +245,8 @@ void BakerBinding::_bind_methods() {
     ClassDB::bind_method(D_METHOD("capture"), &BakerBinding::capture);
     ClassDB::bind_static_method("BakerBinding", D_METHOD("shared_tweak_count"),
                                 &BakerBinding::shared_tweak_count);
+    ClassDB::bind_static_method("BakerBinding", D_METHOD("resource_of", "path"),
+                                &BakerBinding::resource_of);
     ADD_PROPERTY(godot::PropertyInfo(Variant::DICTIONARY, "bindings",
                                      godot::PROPERTY_HINT_TYPE_STRING, "String:String"),
                  "set_bindings", "get_bindings");
@@ -259,7 +301,8 @@ int64_t BakerBinding::capture() {
         const Variant now = u->target->get(u->property);
         if (now == u->last) continue;
         u->last = now;
-        if (runtime->set_value(to_godot(u->shared->tweaked->tweak().path()), now) == godot::OK)
+        const Variant edit = u->shared->from_property(now);
+        if (runtime->set_value(to_godot(u->shared->tweaked->tweak().path()), edit) == godot::OK)
             ++edits;
     }
     return edits;
@@ -283,6 +326,15 @@ Array BakerBinding::all_bindings() {
 
 int64_t BakerBinding::shared_tweak_count() {
     return int64_t(shared_tweaks().size());
+}
+
+String BakerBinding::resource_of(const String& path) {
+    const auto it = shared_tweaks().find(to_std(path));
+    if (it == shared_tweaks().end()) return {};
+    for (const BakerBinding::Use* u : it->second->uses)
+        if (const auto* r = godot::Object::cast_to<godot::Resource>(u->target))
+            return r->get_path();
+    return {};
 }
 
 void BakerBinding::_exit_tree() {
@@ -327,16 +379,48 @@ void BakerBinding::rebind() {
         // own value, so dropping the path gives the shader's default back.
         const Variant held = target->get(property);
         const auto declared = Variant::Type(int64_t(Dictionary(infos[property]).get("type", 0)));
-        const Variant current = held.get_type() == Variant::NIL && declared != Variant::NIL
-                                    ? godot::UtilityFunctions::type_convert(Variant(), declared)
-                                    : held;
+        Variant current = held.get_type() == Variant::NIL && declared != Variant::NIL
+                              ? godot::UtilityFunctions::type_convert(Variant(), declared)
+                              : held;
+        // A resource property: a Curve, or a reference to a record (by its key).
+        String table;
+        bool curve = false;
+        if (declared == Variant::OBJECT) {
+            const Dictionary info = infos[property];
+            const String type = info.get("hint_string", "");
+            curve = int64_t(info.get("hint", 0)) == godot::PROPERTY_HINT_RESOURCE_TYPE &&
+                    type == "Curve";
+            if (BakerRuntime* runtime = BakerRuntime::get_singleton(); runtime && !curve)
+                table = runtime->record_table(type);
+            if (!table.is_empty())
+                current = godot::StringName(BakerRuntime::get_singleton()->record_key(
+                    table, held.operator godot::Object*()));
+        }
         const std::string key = to_std(path);
         std::unique_ptr<Shared>& slot = shared_tweaks()[key];
         if (!slot) {
             auto s = std::make_unique<Shared>();
             s->allowed = std::make_unique<Allowed>();
-            s->tweaked =
-                make_tweak(baker::Symbol(key), current, meta_of(infos[property], *s->allowed));
+            if (curve) {
+                std::vector<baker::CurvePoint> points;
+                baker::CurveMode mode = baker::CurveMode::Monotone;
+                if (const auto* c = godot::Object::cast_to<godot::Curve>(held))
+                    curve_points(*c, points, mode);
+                s->tweaked = std::make_unique<CurveTweak>(baker::Symbol(key), std::move(points),
+                                                          mode, baker::TweakMeta{});
+            } else if (!table.is_empty()) {
+                // The table's keys are the reference's allowed values.
+                const Array keys = BakerRuntime::get_singleton()->records(table).keys();
+                for (int64_t k = 0; k < keys.size(); ++k)
+                    s->allowed->one_of.push_back(baker::Symbol(to_std(String(keys[k]))).str());
+                baker::TweakMeta meta;
+                meta.one_of = s->allowed->one_of;
+                s->tweaked = make_tweak(baker::Symbol(key), current, meta);
+                s->table = table;
+            } else {
+                s->tweaked =
+                    make_tweak(baker::Symbol(key), current, meta_of(infos[property], *s->allowed));
+            }
             if (!s->tweaked) {
                 shared_tweaks().erase(key);
                 godot::UtilityFunctions::push_warning("BakerBinding: ", property, " is a ",
@@ -351,7 +435,12 @@ void BakerBinding::rebind() {
             raw->tweaked->tweak().on_change([raw] {
                 const bool bound = raw->tweaked->tweak().bound();
                 const Variant v = raw->tweaked->value();
-                for (BakerBinding::Use* u : raw->uses) u->assign(bound ? v : u->scene);
+                for (BakerBinding::Use* u : raw->uses) {
+                    if (bound)
+                        u->assign(v);
+                    else
+                        u->assign_held(u->scene);
+                }
             });
             slot = std::move(s);
         } else if (slot->type != current.get_type()) {

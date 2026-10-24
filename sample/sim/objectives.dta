@@ -18,3 +18,11 @@
 (objective duel.tank_holds (desc "Infantry takes at least 3 hits to destroy a tank")
    (measure {skirmish.hits infantry tank 0})
    (pass {>= $value 3}))
+
+(objective cards.fireball_cost (desc "Fireball costs what the data says, not its file's 3")
+   (measure {skirmish.card fireball cost})
+   (pass {== $value 2}))
+
+(objective cards.strike_upgrades (desc "Strike upgrades to bash, a card named in the data")
+   (measure {== {skirmish.card strike upgrade} bash})
+   (pass $value))

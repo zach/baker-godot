@@ -46,6 +46,13 @@ content; emitting shapes from a GDScript class, until hand-written shapes prove 
 - **A live edit of one instance's bound property is an edit of its path,** and so of every
   instance that binds it: right for a type's stats. State a game derives from a stat (current
   hit points from the maximum) re-derives on `property_changed`.
+- **Records bind by a call, not a project-file entry** (`bind_records(prefix, dir, {key,
+  group})`): a game binds a directory of its resources where it loads them, and a tool
+  command sees their tweaks once the scene is ready. The tunables are an `@export_group`,
+  `Tuning` by default; a reference is the record's key, its tweak's `one_of` the table's
+  keys (Baker 0.6.0's `key_of` is a shape's, for tables in the data); a Curve's points take
+  Baker's slopes, which Godot samples as slopes. An export lists `NAME.tres.remap`, which the
+  loader follows: no list baked at export.
 - **Rules are script functions the data defines in `#autorun`,** which Baker reruns bottom
   to top after every change of the stack, so the topmost definition wins and toggling a
   layer off restores the one below. GDScript calls them with `call_function`, since `call`
