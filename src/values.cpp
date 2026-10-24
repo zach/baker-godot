@@ -211,14 +211,14 @@ bool to_values(const Variant& value, baker::ValueList& out) {
 
 void curve_points(const godot::Curve& curve, std::vector<baker::CurvePoint>& points,
                   baker::CurveMode& mode) {
-    const int64_t n = curve.get_point_count();
+    const int32_t n = int32_t(curve.get_point_count());
     bool linear = true;
-    for (int64_t i = 0; i < n; ++i)
+    for (int32_t i = 0; i < n; ++i)
         linear = linear && curve.get_point_left_mode(i) == godot::Curve::TANGENT_LINEAR &&
                  curve.get_point_right_mode(i) == godot::Curve::TANGENT_LINEAR;
     mode = linear ? baker::CurveMode::Linear : baker::CurveMode::Monotone;
     points.clear();
-    for (int64_t i = 0; i < n; ++i) {
+    for (int32_t i = 0; i < n; ++i) {
         const godot::Vector2 p = curve.get_point_position(i);
         baker::CurvePoint point{.x = p.x, .y = p.y};
         if (!linear) {
@@ -244,12 +244,12 @@ godot::Ref<godot::Curve> to_godot_curve(const baker::Curve& curve, godot::String
     if (x1 <= x0) x1 = x0 + 1;
     if (y1 <= y0) y1 = y0 + 1;
     // Widen before narrowing: Godot keeps min below max at every step.
-    out->set_max_domain(std::max(x1, double(out->get_max_domain())));
-    out->set_min_domain(x0);
-    out->set_max_domain(x1);
-    out->set_max_value(std::max(y1, double(out->get_max_value())));
-    out->set_min_value(y0);
-    out->set_max_value(y1);
+    out->set_max_domain(float(std::max(x1, double(out->get_max_domain()))));
+    out->set_min_domain(float(x0));
+    out->set_max_domain(float(x1));
+    out->set_max_value(float(std::max(y1, double(out->get_max_value()))));
+    out->set_min_value(float(y0));
+    out->set_max_value(float(y1));
     if (curve.mode() == baker::CurveMode::Constant)
         warning = "a constant curve is linear in Godot, which has no steps";
     else if (curve.extend() != baker::CurveExtend::Clamp)
