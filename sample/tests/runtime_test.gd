@@ -370,6 +370,12 @@ func run() -> void:
 		"apply_held(): all of it at once, the saved file too")
 	check(print1 != print0 and print1 == Baker.fingerprint() and Baker.is_locked(),
 		"it returns the new fingerprint, and the data stays locked")
+	f = FileAccess.open(LOCAL, FileAccess.WRITE)
+	f.store_string("(player (run (speed 235)))\n")
+	f.close()
+	Baker.apply_held()
+	check(Baker.get_value("player.run.speed", 0) == 235,
+		"a file saved the moment before the boundary is in it, whatever the watcher has seen")
 	Baker.toggle_layer("floaty")
 	Baker.unlock()
 	check(not Baker.is_locked() and Baker.held_count() == 0

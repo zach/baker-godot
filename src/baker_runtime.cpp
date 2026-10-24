@@ -660,8 +660,15 @@ String BakerRuntime::apply_held() {
     const bool locked = locked_;
     locked_ = false;
     for (const std::function<void()>& change : held) change();
-    if constexpr (!baker::kShipping)
-        if (live_) live_->begin_frame();  // the files saved meanwhile, and the console
+    if constexpr (!baker::kShipping) {
+        // Every file saved before the boundary, whether or not the watcher has reported it
+        // yet: a boundary that depended on when the watcher noticed would not be the same
+        // for every peer. Then the console, and #autorun after the reload.
+        if (live_) {
+            (void)live_->reload_now();
+            live_->begin_frame();
+        }
+    }
     locked_ = locked;
     session_dirty_ = true;
     return fingerprint();

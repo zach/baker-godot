@@ -140,7 +140,8 @@ public:
     // a layer pushed or removed, a reload, a file saved; and the console waits with it.
     // toggle_layer() returns the state the layer will have. Reads see the locked data.
     godot::String lock();
-    // At a turn's boundary: applies what waited, all at once, and returns the new
+    // At a turn's boundary: applies what waited, all at once, with every file saved before
+    // it (read again, whether or not the watcher has reported it), and returns the new
     // fingerprint. The data stays locked.
     godot::String apply_held();
     // Applies what waited, and unlocks.
