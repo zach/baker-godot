@@ -46,6 +46,10 @@ content; emitting shapes from a GDScript class, until hand-written shapes prove 
 - **A live edit of one instance's bound property is an edit of its path,** and so of every
   instance that binds it: right for a type's stats. State a game derives from a stat (current
   hit points from the maximum) re-derives on `property_changed`.
+- **Rules are script functions the data defines in `#autorun`,** which Baker reruns bottom
+  to top after every change of the stack, so the topmost definition wins and toggling a
+  layer off restores the one below. GDScript calls them with `call_function`, since `call`
+  is every Godot Object's own method.
 - **The match lock is the integration's own, not the Config's freeze.** Baker's `freeze()`
   is one way and refuses changes; a match needs them held, in order, and applied at a turn's
   boundary. The fingerprint is Baker's `Config::digest()` (0017, in Baker 0.6.0), as

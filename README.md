@@ -63,6 +63,14 @@ the remote inspector sends, and checks the diff.
   Resource's properties as a `BakerBinding` binds a node's, with the same shared tweaks; a
   shader's parameters are a `ShaderMaterial`'s (`"shader_parameter/glow"`), so one path
   can feed a script's value and a shader. It returns the binding; `unbind_resource` ends it.
+- **Rules in Baker's script.** A rule is a script function the data defines in a layer's
+  `#autorun`, so a layer above changes it by defining it again: an experiment, an agent's
+  proposal, a mod. The game calls it with `Baker.call_function("skirmish.damage", [6, 2,
+  0])`, and `Baker.eval("{skirmish.damage 6 2 1}")` evaluates script text; both give Godot
+  values. A rule reads tunables with `{config.get path}`. The sample's damage rule is in
+  `data/skirmish.dta`, the `piercing` experiment defines it again (armor stops half), and the
+  `duel` scenario judges it, so `sim` and `compare` see a changed rule as they see a changed
+  number.
 - **A match in lockstep.** `Baker.fingerprint()` is the data as the game reads it, as
   sixteen hex digits: peers compare theirs before a match. `Baker.lock()` returns it and
   holds every change until `apply_held()`, which a game calls at a turn's boundary and which
@@ -107,6 +115,7 @@ the remote inspector sends, and checks the diff.
   | `write_back_to(path, "local")` | keep a value in your own layer, in `user://` |
   | `session()` | what the editor is sent: unsaved values, layers, bindings |
   | `reload()`, `loop_stats()` | reload now; how long edits take to be seen |
+  | `call_function(name, args)`, `eval(text)` | a rule, or any script, with Godot values |
 
   The `changed` signal fires after every change of the data.
 

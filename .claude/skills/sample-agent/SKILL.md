@@ -77,11 +77,15 @@ random number: the same data and scenario give the same result on every seed.
   (`player.air_control`), and the jump (`player.jump.height`, `time_to_peak`,
   `fall_multiplier`, `coyote`, `buffer`), with `player.max_fall`. Gravity follows from the
   jump's height and time to peak: changing the time changes the gravity, not the height.
-- **Scenarios:** `jump` (one held jump peaks at `player.jump.height`, within 2 px) and
+- **Scenarios:** `jump` (one held jump peaks at `player.jump.height`, within 2 px),
   `reach` (a jump from the floor clears the first platform, 100 px up, with 10 px to spare,
-  and stays 20 px below the second, 180 px up: the climb takes two jumps).
-- **Experiments:** `floaty` (in `data/experiments/`) is a person's A/B, off by default. Do
-  not tune it unless asked; a scenario runs with it off.
+  and stays 20 px below the second, 180 px up: the climb takes two jumps), and `duel`
+  (infantry takes at least 3 hits to destroy a tank).
+- **Rules:** the skirmish's damage is a script function in `data/skirmish.dta`, defined in
+  its `#autorun`. To change a rule rather than a number, define it again in `agent.dta`'s
+  own `#autorun`, whole, with its `(doc ...)`; `sim` judges it as it judges a value.
+- **Experiments:** `floaty` and `piercing` (in `data/experiments/`) are a person's A/B, off
+  by default. Do not tune them unless asked; a scenario runs with them off.
 
 ## Rules
 

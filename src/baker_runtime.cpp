@@ -135,6 +135,9 @@ void BakerRuntime::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_console_port"), &BakerRuntime::get_console_port);
     ClassDB::bind_method(D_METHOD("bind_function", "name", "function"),
                          &BakerRuntime::bind_function);
+    ClassDB::bind_method(D_METHOD("call_function", "name", "args"), &BakerRuntime::call_function,
+                         DEFVAL(Array()));
+    ClassDB::bind_method(D_METHOD("eval", "text"), &BakerRuntime::eval);
     ClassDB::bind_method(D_METHOD("is_simulating"), &BakerRuntime::is_simulating);
     ClassDB::bind_method(D_METHOD("sim_ready"), &BakerRuntime::sim_ready);
     ClassDB::bind_static_method("BakerRuntime", D_METHOD("is_shipping"),
@@ -378,7 +381,11 @@ void BakerRuntime::run_tool_command() {
         return list_files(dir, file);
     };
     tool_hooks_.output = [this](std::string_view text) { tool_output_.append(text); };
-    tool_hooks_.bind = [this](baker::Context& ctx) { bind_functions(ctx); };
+    tool_hooks_.bind = [this](baker::Context& ctx) {
+        tool_context_ = &ctx;
+        bind_functions(ctx);
+    };
+    tool_hooks_.unbind = [this](baker::Context&) { tool_context_ = nullptr; };
     // The game's own reads (get_value, explain, ...) see the command's data, as it loads.
     tool_hooks_.changed = [this](const baker::Config& cfg) {
         tool_config_ = &cfg;
@@ -532,6 +539,56 @@ void BakerRuntime::bind_into(baker::Context& ctx, baker::Symbol name) {
     };
     auto r = ctx.declare(name, std::span<const baker::OverloadDescription>(&overload, 1), body);
     if (!r) (void)fail(r.error());
+}
+
+baker::Context* BakerRuntime::script_context() noexcept {
+    return tool_context_ ? tool_context_ : context_.get();
+}
+
+Variant BakerRuntime::call_function(const String& name, const Array& args) {
+    baker::Context* ctx = script_context();
+    if (!ctx) {
+        last_error_ = "Baker: no project is open";
+        godot::UtilityFunctions::push_error(last_error_);
+        return Variant();
+    }
+    baker::ValueList command;
+    command.push(baker::Node(baker::Symbol(to_std(name))));
+    for (int64_t i = 0; i < args.size(); ++i) {
+        baker::ValueList value;
+        if (!to_values(args[i], value) || value.nodes().empty()) {
+            last_error_ = "Baker: argument " + String::num_int64(i + 1) + " of " + name + ", a " +
+                          Variant::get_type_name(args[i].get_type()) + ", is not a value";
+            godot::UtilityFunctions::push_error(last_error_);
+            return Variant();
+        }
+        if (value.nodes().size() == 1)
+            command.push(value.nodes()[0]);
+        else
+            command.push(baker::Node(baker::Array::make_copy(value.nodes())));
+    }
+    return evaluated(
+        ctx->eval(baker::Node(baker::Array::make_copy(command.nodes()), baker::Type::Command)));
+}
+
+Variant BakerRuntime::eval(const String& text) {
+    baker::Context* ctx = script_context();
+    if (!ctx) {
+        last_error_ = "Baker: no project is open";
+        godot::UtilityFunctions::push_error(last_error_);
+        return Variant();
+    }
+    return evaluated(ctx->eval(to_std(text), "<game>"));
+}
+
+Variant BakerRuntime::evaluated(const baker::Expected<baker::Node>& result) {
+    if (!result) {
+        (void)fail(result.error());
+        return Variant();
+    }
+    const Variant v = to_variant(*result);
+    if (!tool_context_) changed_since();  // a command may have changed the data
+    return v;
 }
 
 // The editor's messages: the prefix "baker:" is taken off before they reach here.

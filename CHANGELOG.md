@@ -44,6 +44,11 @@ On Baker 0.6.0.
 - **`bind_resource(resource, bindings)`** binds a Resource's properties on the shared
   tweaks, a shader's parameters among them; a property that holds nothing yet binds as
   the type it declares.
+- **Rules in Baker's script.** `call_function(name, args)` calls a script function with
+  Godot values, and `eval(text)` evaluates script text; both return Godot values, in a tool
+  command's or `sim`'s Context while one runs. A rule the data defines in a layer's
+  `#autorun` is changed by a layer above defining it again: the sample's damage rule, its
+  `piercing` experiment, and a `duel` scenario that judges it.
 - **Lockstep.** `fingerprint()`, the data as the game reads it in sixteen hex digits,
   the same on every platform for the same data; `lock()`, which holds every change to the
   data (toggles, live edits, layers pushed or removed, files saved, the console) until

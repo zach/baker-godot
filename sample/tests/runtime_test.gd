@@ -30,7 +30,7 @@ func _ready() -> void:
 func run() -> void:
 	check(Baker.is_open(), "the project file opens")
 	var names := Baker.get_layers().map(func(l): return l["name"])
-	check(names == ["default", "local", "agent", "floaty", "scratch"],
+	check(names == ["default", "local", "agent", "floaty", "piercing", "scratch"],
 		"layers from the project file, bottom to top: %s" % [names])
 
 	# A player with one property the data has and one it lacks.
@@ -135,7 +135,7 @@ func run() -> void:
 	check(bound.size() == 1 and bound[0]["object_id"] == player.get_instance_id()
 		and bound[0]["path"] == "player.jump.height",
 		"session() lists the bindings with their objects: %s" % [bound])
-	check(session["layers"].size() == 5, "session() gives the layers")
+	check(session["layers"].size() == 6, "session() gives the layers")
 	Baker.clear_scratch("player/run/speed")
 	check(player.run_speed == 220.0, "discarded, the property returns to the data's value")
 	check(binding.capture() == 0, "which is not taken for an edit")
@@ -177,7 +177,8 @@ func run() -> void:
 	check(Baker.push_layer("pack", "user://baker/pack.dta", {"below": "local"}) == OK,
 		"push_layer: a content pack below local")
 	check(Baker.get_layers().map(func(l): return l["name"])
-		== ["default", "pack", "local", "agent", "floaty", "scratch"], "in its place in the stack")
+		== ["default", "pack", "local", "agent", "floaty", "piercing", "scratch"],
+		"in its place in the stack")
 	check(SkirmishCatalog.units().has("scout") and SkirmishCatalog.units()["tank"]["price"] == 40,
 		"its records merge into the table: a new unit, a retuned price")
 	pack = FileAccess.open("user://baker/pack.dta", FileAccess.WRITE)
@@ -259,6 +260,28 @@ func run() -> void:
 		u.free()
 	check(BakerBinding.shared_tweak_count() == tweaks_before,
 		"the units gone, their tweaks go: %d left" % [BakerBinding.shared_tweak_count()])
+
+	# Rules in Baker's script: the data defines them, the game calls them.
+	check(Baker.call_function("skirmish.damage", [6, 2, 0]) == 4,
+		"call_function: a rule the data defines, with Godot values: 4")
+	check(SkirmishRules.damage("infantry", "tank") == 4 and SkirmishRules.hits_to_kill("infantry", "tank") == 3,
+		"read with the unit table: infantry hits a tank for 4, three hits")
+	check(Baker.eval("{skirmish.damage 6 2 1}") == 6 and Baker.eval("{+ 1 2}") == 3,
+		"eval: script text, as the console takes it")
+	Baker.set_value("rules.level_bonus", 3)
+	check(SkirmishRules.damage("infantry", "tank", 1) == 7, "a rule reads the data: a live edit of its bonus")
+	Baker.clear_scratch()
+	Baker.toggle_layer("piercing")
+	await until(func(): return SkirmishRules.damage("infantry", "tank") == 5)
+	check(SkirmishRules.hits_to_kill("infantry", "tank") == 2,
+		"an experiment layer changes the rule, not a number: armor stops half, two hits")
+	Baker.toggle_layer("piercing")
+	await until(func(): return SkirmishRules.damage("infantry", "tank") == 4)
+	check(SkirmishRules.damage("infantry", "tank") == 4, "toggled off, the base rule is back")
+	check(Baker.call_function("skirmish.no_such_rule", []) == null and Baker.get_last_error() != "",
+		"a call that fails gives null, and says why: %s" % Baker.get_last_error())
+	check(Baker.call_function("skirmish.damage", [Vector2(1, 2), 0, 0]) == null,
+		"an argument is one value: a Vector2 is a list, which the rule cannot add")
 
 	# A reload lands at the frame's start: a node processed before every other sees it in the
 	# same frame as one processed after.

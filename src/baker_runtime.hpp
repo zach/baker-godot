@@ -9,6 +9,7 @@
 //   var h = Baker.get_value("player.jump.height", 96.0)   # a read through the Config
 //   var g = Baker.tweak("world.gravity", 980.0)           # cached until the data changes
 //   Baker.toggle_layer("floaty")                          # an experiment, A/B
+//   var d = Baker.call_function("skirmish.damage", [6, 2, 0])  # a rule the data defines
 //
 // Properties of scene nodes are bound with a BakerBinding instead, which costs nothing per
 // frame.
@@ -173,6 +174,14 @@ public:
     // error at the call. Bound in the console's Context now, and in every tool command's.
     // Binding a name again replaces the function, so a scene that is reloaded binds its own.
     void bind_function(const godot::String& name, const godot::Callable& function);
+    // Calls the script function `name` with `args` and returns its result as a Godot value:
+    // a rule the data defines ({func ...} in a layer's #autorun, which a layer above defines
+    // again to change it), or a function a script binds. Each argument is one value: an
+    // Array or a Vector2 is one list. Nil, with the error pushed, if the call fails. While a
+    // tool command or sim runs, in that command's Context.
+    godot::Variant call_function(const godot::String& name, const godot::Array& args);
+    // Evaluates Baker script text, as the console does, and returns its value.
+    godot::Variant eval(const godot::String& text);
     // Under --baker sim: whether a run is in progress, and, from the scene the run reloaded,
     // that it is set up and the run may step.
     [[nodiscard]] bool is_simulating() const noexcept { return sim_ != nullptr; }
@@ -222,6 +231,9 @@ private:
     void run_tool_command();
     void bind_functions(baker::Context& ctx);
     void bind_into(baker::Context& ctx, baker::Symbol name);
+    // The Context scripts run in: a tool command's or sim's while one runs, else the game's.
+    [[nodiscard]] baker::Context* script_context() noexcept;
+    godot::Variant evaluated(const baker::Expected<baker::Node>& result);
     void finish_tool(int status);
     bool debugger_message(const godot::String& message, const godot::Array& data);
 
@@ -251,6 +263,7 @@ private:
     std::string tool_output_;             // what the command wrote
     baker::host::CommandHooks tool_hooks_;
     const baker::Config* tool_config_ = nullptr;  // the command's, once it has loaded
+    baker::Context* tool_context_ = nullptr;      // the command's, while its data is loaded
     std::unique_ptr<baker::host::SimRun> sim_;    // --baker sim, in progress
     bool sim_reloading_ = false;                  // the scene is being reset for the next run
     godot::Dictionary functions_;                 // bind_function: name -> Callable

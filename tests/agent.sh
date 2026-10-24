@@ -134,12 +134,12 @@ sim before; status=$?
 [ "$status" -eq 1 ]; check $? "the baseline: reach fails on the shipped data (sim exits 1)"
 json before/results.json 'd["schema"] == "baker.sim/1.3" and d["status"] == "failed"'
 check $? "  as baker.sim/1.3 results"
-json before/results.json '[(r["scenario"], r["seed"]) for r in d["runs"]] == [("jump", s) for s in (1, 2, 3)] + [("reach", s) for s in (1, 2, 3)]'
+json before/results.json '[(r["scenario"], r["seed"]) for r in d["runs"]] == [(n, s) for n in ("duel", "jump", "reach") for s in (1, 2, 3)]'
 check $? "  every scenario, each seed a run of its own"
-json before/results.json '[o["value"] for r in d["runs"] for o in r["objectives"]] == [96.06] * 9'
+json before/results.json '[o["value"] for r in d["runs"] if r["scenario"] != "duel" for o in r["objectives"]] == [96.06] * 9'
 check $? "  the same apex in every run: 96.06"
 tool layers.json eval --baker-json "{config.layers}"
-json layers.json '[l["layer"] for l in d["value"]] == ["default", "agent", "floaty", "scratch"]'
+json layers.json '[l["layer"] for l in d["value"]] == ["default", "agent", "floaty", "piercing", "scratch"]'
 check $? "  the tool commands leave out the local layer"
 # A scenario is data: check holds its calls to the game's functions, by name and by their
 # parameters.
@@ -158,7 +158,7 @@ rm "$work/sim/scenarios/typo.dta"
 printf '(player (jump (height 200)))\n' > "$work/data/agent.dta"
 sim over; compare before over over.json; status=$?
 [ "$status" -eq 1 ]; check $? "a jump of 200: compare exits 1"
-json over.json 'd["schema"] == "baker.compare/1" and d["broke"] == 1 and {o["name"]: o["moved"] for o in d["objectives"]} == {"jump.apex": "same", "reach.first_platform": "fixed", "reach.not_second_platform": "broke"}'
+json over.json 'd["schema"] == "baker.compare/1" and d["broke"] == 1 and {o["name"]: o["moved"] for o in d["objectives"]} == {"duel.tank_holds": "same", "jump.apex": "same", "reach.first_platform": "fixed", "reach.not_second_platform": "broke"}'
 check $? "  it fixed the first platform and broke the second: not done"
 printf '; The agent: a higher jump, to clear the first platform.\n(player (jump (height 120)))\n' \
     > "$work/data/agent.dta"
@@ -168,6 +168,15 @@ check $? "  diff: $(grep player "$work/diff.txt" | xargs)"
 sim after; check $? "  sim passes"
 compare before after after.json; check $? "  compare exits 0"
 json after.json 'd["broke"] == 0 and d["fixed"] == 1'; check $? "  one objective fixed, none broken"
+# A rule, not a number: the agent's layer defines the skirmish's damage rule again.
+cp "$work/data/agent.dta" "$work/jump.dta"
+cp "$work/data/experiments/piercing.dta" "$work/data/agent.dta"
+tool check3.json check --baker-json; check $? "a layer that changes a rule: check passes"
+sim rule; [ $? -eq 1 ]; check $? "  sim sees the rule: the duel fails (exits 1)"
+compare before rule rule.json
+json rule.json '{o["name"]: o["moved"] for o in d["objectives"]}["duel.tank_holds"] == "broke"'
+check $? "  compare names the objective the rule broke"
+cp "$work/jump.dta" "$work/data/agent.dta"
 
 # 4.
 "$godot" --headless --path "$work" -- --console-port 0 > "$work/game.txt" 2>&1 &

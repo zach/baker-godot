@@ -14,6 +14,16 @@
    (barracks (income 5)  (capture 70))
    (tower    (income 15) (capture 50)))
 
+; The rules, in Baker's script: each layer's #autorun commands run bottom to top, so a layer
+; above changes a rule by defining it again, as an experiment or an agent's layer does. The
+; game calls them with Baker.call_function (skirmish/rules.gd).
+(rules
+   (level_bonus 2 (desc "Attack a level adds")))
+#autorun {func skirmish.damage ($attack $armor $level)
+   (doc "One hit: the attacker's attack and its level's bonus, less the defender's armor; at least 1.")
+   {do (($hit {- {+ $attack {* $level {config.get rules.level_bonus}}} $armor}))
+      {if {< $hit 1} 1 $hit}}}
+
 ; The AI's opening: what it builds first, in order.
 (ai
    (opening (build infantry) (build infantry) (build tank)))

@@ -1,0 +1,5 @@
+; The skirmish's rules, judged without a board: how many hits one unit takes from another
+; ({skirmish.hits}, skirmish/rules.gd, through the damage rule in data/skirmish.dta).
+(scenario duel (desc "Armor keeps a tank in the fight against infantry")
+   (steps 1)
+   (objectives duel.tank_holds))

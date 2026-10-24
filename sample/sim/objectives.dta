@@ -14,3 +14,7 @@
 (objective reach.not_second_platform (desc "Stays 20 px below the second platform, 180 px up")
    (measure {player.apex})
    (pass {<= $value 160}))
+
+(objective duel.tank_holds (desc "Infantry takes at least 3 hits to destroy a tank")
+   (measure {skirmish.hits infantry tank 0})
+   (pass {>= $value 3}))

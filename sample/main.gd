@@ -23,6 +23,7 @@ func _ready() -> void:
 	Baker.changed.connect(_show_layers)
 	_show_layers()
 	add_child(preload("res://sim/driver.gd").new())
+	Baker.bind_function("skirmish.hits", SkirmishRules.hits_to_kill)
 	if Baker.is_simulating():
 		Baker.sim_ready.call_deferred()
 
