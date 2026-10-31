@@ -8,6 +8,8 @@ versioning](https://semver.org); before 1.0.0, a minor version may change the AP
 Phase 2: what a game shaped like a real one needs, proven on a second sample, a turn-based
 skirmish with tables, rules, records, plugins and two peers. Built on Baker 0.7.0 and
 godot-cpp `godot-4.5-stable`, for Godot 4.5.1, on Linux, Windows and macOS (Apple silicon).
+macOS was last verified in CI at phase 2's step 7: its CI job is paused, its runners
+unavailable since; steps 8 and the release changed GDScript, data, tests and docs, not C++.
 
 - **Baker 0.7.0.** Metadata after a value is spelled with `@`, `(level_bonus 2 (@desc
   "..."))`, and a file declares its shapes with `#shape`: the sample's data is migrated with

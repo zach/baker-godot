@@ -33,12 +33,14 @@ jobs:
           # template and a signing setup of its own. The demonstration's headless editor
           # cannot start the game on the runner (EditorRun::run fails, editor_run.cpp:178),
           # though the game started directly runs every other suite there.
-          - os: macos-14
-            godot: Godot.app/Contents/MacOS/Godot
-            zip: Godot_v4.5.1-stable_macos.universal.zip
-            template: ""
-            preset: ""
-            no_editor_play: true
+          # Paused on 2026-10-31: since then every macOS job was cancelled before a runner
+          # took it. Last green at e318f84 (phase 2, step 7). To restore, uncomment the entry.
+          # - os: macos-14
+          #   godot: Godot.app/Contents/MacOS/Godot
+          #   zip: Godot_v4.5.1-stable_macos.universal.zip
+          #   template: ""
+          #   preset: ""
+          #   no_editor_play: true
     runs-on: ${{ matrix.os }}
     defaults:
       run:
