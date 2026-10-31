@@ -286,7 +286,8 @@ against a local Baker checkout, add `-DFETCHCONTENT_SOURCE_DIR_BAKER=/path/to/ba
 4. **Requirements back to Baker** (done), as notes in `requirements/`: 0001 to 0020 shipped
    in Baker and are in use here; 0021 is built on Baker's main, for its next release.
 5. **Phase 2** (done, `dev/phase-2-plan.md`): the skirmish sample, steps 1 to 8.
-6. **Phase 3** (next): C#, a thin typed package and values a threaded simulation reads.
+6. **Phase 3** (next, `dev/phase-3-plan.md`): Godot 4.7, a C# package on NuGet, values a
+   threaded simulation reads, and the skirmish ported to C#.
 
 ## Requirements for Baker
 
