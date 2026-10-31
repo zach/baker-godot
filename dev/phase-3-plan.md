@@ -58,6 +58,11 @@ moves nothing; a dearer tank in the agent's layer fails both the same. The sides
 on two worker threads from one snapshot a turn; the random draws use the engine's generator
 per side, seeded as the GDScript match seeds it, which the port calls from the worker.
 
+**Step 5, tooling and agents:** CI runs every suite in Godot 4.7.2's .NET build and packs
+the package (step 2); `export.sh` exports the C# sample with the .NET templates (step 2);
+the evaluation's six skirmish tasks rerun on the port give 18 of 18 ($2.54), the agents'
+fixes those of the GDScript round, with `--skirmish cs` in every command. Phase 3 is done.
+
 ## With Baker
 
 Probably nothing new: the snapshot is built from what the runtime already reads. If a

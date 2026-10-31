@@ -24,7 +24,9 @@ On Baker 0.7.0 and Godot 4.7.
 - **The skirmish in C#** (`sample/skirmish/cs/`, `-- --skirmish cs`): the match, with each
   side's turn on a worker thread reading a published snapshot, the catalog, the rules and
   the cards' field; `tests/port.sh` shows `sim` over seeds 1-5 giving the GDScript
-  skirmish's results run by run, and `compare` moving nothing.
+  skirmish's results run by run, and `compare` moving nothing. The evaluation's skirmish
+  tasks rerun on the port (`eval/harness.py --skirmish cs`) succeed 18 of 18, with the
+  same fixes as on the GDScript skirmish.
 
 ## 0.2.0 - 2026-10-31
 
