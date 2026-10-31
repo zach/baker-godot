@@ -95,8 +95,8 @@ the remote inspector sends, and checks the diff.
   keyed table as a Dictionary of records, `{"tank": {"hp": 10, "price": 50, ...}, ...}`; with
   an Array fallback, a list of records with one tag is an Array of them
   (`(opening (build infantry) (build tank))` at `ai.opening` is `[&"infantry", &"tank"]`).
-  Metadata after a value is left out, so a field is never named `range`, `step`, `desc`,
-  `note`, `kind`, `group` or `one_of`. Shapes in the data hold the tables to their fields
+  Metadata after a value, `(@range 0 10)` or `(@desc "...")`, is left out; any other name,
+  `kind` or `range` too, is a field. Shapes in the data hold the tables to their fields
   (`sample/data/skirmish.dta`). `set_value("units.tank", {"price": 45})` sets each field it
   names as a live edit of its own, and a table read sees them.
 - **The editor plugin** (`addons/baker/plugin.cfg`):
@@ -219,7 +219,7 @@ step (run it under a display, such as `xvfb-run`).
 
 ## Building
 
-CMake fetches godot-cpp (4.5) and Baker 0.6.0 (its core, its host kit and its tools), and puts the library in
+CMake fetches godot-cpp (4.5) and Baker 0.7.0 (its core, its host kit and its tools), and puts the library in
 `sample/addons/baker/bin/`:
 
 ```sh

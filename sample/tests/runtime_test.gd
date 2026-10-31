@@ -77,8 +77,8 @@ func run() -> void:
 
 	# Kept for oneself: written into the local layer, in user://.
 	check(Baker.write_back_to("player.jump.height", "local") == OK, "write_back_to local")
-	check(FileAccess.get_file_as_string(LOCAL).contains("(height 120"),
-		"local.dta holds the value: %s" % FileAccess.get_file_as_string(LOCAL))
+	check(FileAccess.get_file_as_string(LOCAL).contains("(/player.jump.height 120"),
+		"local.dta holds the value, as a row: %s" % FileAccess.get_file_as_string(LOCAL))
 	check(Baker.source("player.jump.height")["layer"] == "local", "and local supplies it")
 	check(Baker.journal()[0]["fate"] == "written", "the journal says written")
 	Baker.set_value("player.run.speed", 230.0)
@@ -164,9 +164,10 @@ func run() -> void:
 			% [Baker.get_value("units.tank", {})])
 	check(Baker.unsaved() == PackedStringArray(["units/tank/price"]),
 		"each field a live edit of its own: %s" % [Baker.unsaved()])
-	check(Baker.set_value("probe.rec", {"a": [10, [&"range", 0, 20]], "b": {"c": 1}}) == OK
-		and Baker.get_value("probe.rec", {}) == {"a": 10, "b": {"c": 1}},
-		"metadata after a value is left out: %s" % [Baker.get_value("probe.rec", {})])
+	check(Baker.set_value("probe.rec", {"a": [10, [&"@range", 0, 20]], "b": {"c": 1}, "kind": 2}) == OK
+		and Baker.get_value("probe.rec", {}) == {"a": 10, "b": {"c": 1}, "kind": 2},
+		"metadata, (@...) after a value, is left out; a field may be named kind: %s"
+			% [Baker.get_value("probe.rec", {})])
 	Baker.clear_scratch()
 
 	# Layers the game finds after it starts: a content pack merges into the unit table, and

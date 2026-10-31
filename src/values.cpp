@@ -60,10 +60,9 @@ std::optional<baker::Symbol> tag_of(const baker::Node& n) {
     return std::nullopt;
 }
 
-// An array's values after its tag.
+// An array's values after its tag, up to its (@...) metadata.
 baker::Values after_tag(const baker::Node& n) {
-    const baker::Array* a = n.array();
-    return baker::Values(a->nodes().subspan(1), a);
+    return n.array()->values();
 }
 
 Variant table_entry(const baker::Node& n, bool record);
@@ -71,7 +70,7 @@ Variant table_entry(const baker::Node& n, bool record);
 }  // namespace
 
 Variant to_table(const baker::Values& all) {
-    const baker::Values values = baker::split_metadata(all).values;
+    const baker::Values& values = all;  // values stop at their array's (@...) metadata
     // Keyed: every value an array tagged by a symbol, each tag once.
     bool keyed = !values.empty();
     bool one_tag = !values.empty();  // a list of records: every value tagged alike

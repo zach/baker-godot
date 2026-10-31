@@ -22,7 +22,7 @@
 // The property's export hint is the tweak's metadata, which reference --baker-json gives tools and
 // agents, and which check holds the data to: @export_range(min, max, step) its range and step;
 // @export_enum its allowed values (a String's strings, an int's named choices). The data's
-// own (range ...) or (one_of ...) after a value wins, as for any tweak.
+// own (@range ...) or (@one_of ...) after a value wins, as for any tweak.
 //
 // Under the editor's debugger, a value set on a bound property from outside (the remote
 // inspector) becomes a live edit of its path, and so of every node that binds the path: in

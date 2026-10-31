@@ -5,7 +5,13 @@ versioning](https://semver.org); before 1.0.0, a minor version may change the AP
 
 ## Unreleased
 
-On Baker 0.6.0.
+On Baker 0.7.0.
+
+- **Baker 0.7.0.** Metadata after a value is spelled with `@`, `(level_bonus 2 (@desc
+  "..."))`, and a file declares its shapes with `#shape`: the sample's data is migrated with
+  the release's `baker_migrate_metadata` and `baker_migrate_declarations`. A field may now be
+  named `kind`, `range` or `desc`, and a table read leaves out only `(@...)`. A value kept in
+  a layer's file that lacks its path is written as a row, `(/player.jump.height 120.0)`.
 
 - **Baker 0.6.0.** The kit's tool-command flags begin `--baker-`: `--baker sim
   --baker-scenario jump --baker-seeds 1-3 --baker-results DIR`, `--baker-json`, `compare

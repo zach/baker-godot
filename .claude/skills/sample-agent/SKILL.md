@@ -83,7 +83,7 @@ random number: the same data and scenario give the same result on every seed.
   (infantry takes at least 3 hits to destroy a tank), and `cards` (the cards read the data).
 - **Rules:** the skirmish's damage is a script function in `data/skirmish.dta`, defined in
   its `#autorun`. To change a rule rather than a number, define it again in `agent.dta`'s
-  own `#autorun`, whole, with its `(doc ...)`; `sim` judges it as it judges a value.
+  own `#autorun`, whole, with its `(@doc ...)`; `sim` judges it as it judges a value.
 - **Cards:** each card is a resource, `sample/skirmish/cards/NAME.tres` (read them; never
   edit them). Its tuning is `cards.NAME.cost`, `damage`, `upgrade` (another card's name) and
   `scaling` (a curve, `(scaling (1 1) (3 2))`): `reference --baker-json` lists each with its

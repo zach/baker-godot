@@ -2,6 +2,6 @@
 ; damage rule again (data/skirmish.dta has the base one), and toggled off, the rule is the
 ; base's again.
 #autorun {func skirmish.damage ($attack $armor $level)
-   (doc "One hit: the attacker's attack and its level's bonus, less half the defender's armor; at least 1.")
+   (@doc "One hit: the attacker's attack and its level's bonus, less half the defender's armor; at least 1.")
    {do (($hit {- {+ $attack {* $level {config.get rules.level_bonus}}} {/ $armor 2}}))
       {if {< $hit 1} 1 $hit}}}

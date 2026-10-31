@@ -1,7 +1,7 @@
 ; The skirmish's tables (sample/skirmish/): what each unit and building is. A keyed table
 ; merges by name, so a layer above retunes one record, or one field of it, and a content
-; pack adds records. Flags are 0 or 1. A field is never named range, step, desc, note, kind,
-; group or one_of: after a value, those are its metadata.
+; pack adds records. Flags are 0 or 1. After a value, (@range ...) and (@desc ...) are its
+; metadata, and #shape declares what a record holds.
 
 (units
    (infantry  (hp 10) (move 4) (attack 6)  (armor 0) (price 25) (captures 1))
@@ -18,9 +18,9 @@
 ; above changes a rule by defining it again, as an experiment or an agent's layer does. The
 ; game calls them with Baker.call_function (skirmish/rules.gd).
 (rules
-   (level_bonus 2 (desc "Attack a level adds")))
+   (level_bonus 2 (@desc "Attack a level adds")))
 #autorun {func skirmish.damage ($attack $armor $level)
-   (doc "One hit: the attacker's attack and its level's bonus, less the defender's armor; at least 1.")
+   (@doc "One hit: the attacker's attack and its level's bonus, less the defender's armor; at least 1.")
    {do (($hit {- {+ $attack {* $level {config.get rules.level_bonus}}} $armor}))
       {if {< $hit 1} 1 $hit}}}
 
@@ -36,16 +36,15 @@
 
 ; What a record must hold: check reports a field of the wrong type or out of range, or a
 ; required one missing, as an error, and a field no shape declares as a warning.
-(shapes
-   (unit (at units) (keyed)
-      (hp       int (range 1 50) (desc "Hit points"))
-      (move     int (range 1 10) (desc "Tiles a turn"))
-      (attack   int (range 0 30))
-      (armor    int (range 0 10) (desc "Taken off each hit"))
-      (price    int (range 0 500) (desc "Action points to build one"))
-      (captures int (range 0 1) (optional))
-      (flies    int (range 0 1) (optional))
-      (reach    (list int) (optional) (desc "Nearest and farthest tiles it attacks")))
-   (building (at buildings) (keyed)
-      (income   int (range 0 100) (desc "Action points a turn"))
-      (capture  int (range 1 2000) (desc "Points to take it"))))
+#shape (unit (@at units) (@keyed)
+   (hp       int (@range 1 50) (@desc "Hit points"))
+   (move     int (@range 1 10) (@desc "Tiles a turn"))
+   (attack   int (@range 0 30))
+   (armor    int (@range 0 10) (@desc "Taken off each hit"))
+   (price    int (@range 0 500) (@desc "Action points to build one"))
+   (captures int (@range 0 1) (@optional))
+   (flies    int (@range 0 1) (@optional))
+   (reach    (list int) (@optional) (@desc "Nearest and farthest tiles it attacks")))
+#shape (building (@at buildings) (@keyed)
+   (income   int (@range 0 100) (@desc "Action points a turn"))
+   (capture  int (@range 1 2000) (@desc "Points to take it")))

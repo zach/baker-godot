@@ -58,6 +58,7 @@ const char* standing_name(baker::tools::Standing s) {
         case baker::tools::Standing::Shadowed: return "shadowed";
         case baker::tools::Standing::Removes: return "removes";
         case baker::tools::Standing::Disabled: return "disabled";
+        case baker::tools::Standing::Composes: return "composes";
     }
     return "";
 }
