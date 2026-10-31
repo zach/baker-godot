@@ -1,8 +1,10 @@
 # A release, drafted for a person to publish: run it from the Actions tab (or the API) with
 # the version CHANGELOG.md names. It builds the extension for Linux and Windows, debug and
-# shipping, packs the addon with them, and drafts the GitHub release "Baker for Godot
-# VERSION" on the commit it ran on, with that version's changelog entry as its notes and
-# the addon attached. A draft makes no tag: publishing it does, vVERSION, on that commit.
+# shipping, packs the addon with them, packs the C# API as the NuGet package Baker.Godot
+# at that version, and drafts the GitHub release "Baker for Godot VERSION" on the commit it
+# ran on, with that version's changelog entry as its notes and the addon and the package
+# attached. A draft makes no tag: publishing it does, vVERSION, on that commit. Pushing the
+# package to nuget.org is a person's step, with their key: dotnet nuget push.
 name: Release
 
 on:
@@ -64,6 +66,7 @@ jobs:
             echo "CHANGELOG.md has no entry for $VERSION" >&2
             exit 1
           fi
+          printf '\n**Baker.Godot.%s.nupkg** is the C# API, for a C# game beside the addon.\n' "$VERSION" >> notes.md
           printf '\n**The attached addon** carries the libraries for Linux and Windows (x86_64), debug and release; copy `addons/baker` into a project. For macOS, build them from source (README, "Building").\n' >> notes.md
       - name: The addon, with its libraries
         env:
@@ -72,6 +75,13 @@ jobs:
           ls sample/addons/baker/bin
           cp LICENSE README.md CHANGELOG.md sample/addons/baker/
           (cd sample && zip -qr "../baker-godot-$VERSION.zip" addons/baker)
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: The C# API, as a NuGet package
+        env:
+          VERSION: ${{ inputs.version }}
+        run: dotnet pack csharp/Baker.Godot -c Release -p:Version="$VERSION" -o .
       - name: Draft the release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -79,4 +89,4 @@ jobs:
         run: |
           gh release create "v$VERSION" --draft --target "$GITHUB_SHA" \
             --title "Baker for Godot $VERSION" --notes-file notes.md \
-            "baker-godot-$VERSION.zip"
+            "baker-godot-$VERSION.zip" "Baker.Godot.$VERSION.nupkg"

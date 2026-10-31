@@ -10,6 +10,13 @@ On Baker 0.7.0 and Godot 4.7.
 - **Godot 4.7.** The integration builds with godot-cpp 10.0.0 at API 4.7 and runs on Godot
   4.7.2; the extension's `compatibility_minimum` is 4.7. CI, the export template and the
   docs follow. Phase 3's plan is `dev/phase-3-plan.md`.
+- **The C# API, `Baker.Godot`,** a NuGet package: typed reads (`Get<T>`, `GetTable`,
+  `GetList`), live edits, layers (pushed, toggled, as text, from a directory), rules
+  (`CallFunction<T>`, `Eval`, `BindFunction`), records, lockstep, the `Changed` event, and
+  `Tweak<T>`, a value current after every change. The sample is a C# project too
+  (`BakerSample.csproj`) and runs in Godot's .NET build; `tests/cs_test.tscn` tests the
+  package. CI runs every suite in the .NET build and packs the package; the Release
+  workflow attaches `Baker.Godot.VERSION.nupkg` to the draft.
 
 ## 0.2.0 - 2026-10-31
 

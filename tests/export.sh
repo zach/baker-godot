@@ -14,7 +14,8 @@ here="$(cd "$(dirname "$0")/.." && pwd)"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/project"
-cp -r "$here/sample/." "$work/project/"
+. "$here/tests/copy_sample.sh"
+copy_sample "$work/project"
 rm -rf "$work/project/.godot"
 # An agent's proposal on the exporting machine: version control ignores it, and so must the
 # export (the project file marks its layer dev_only), or the game ships a change no person

@@ -272,6 +272,29 @@ cmake -B build-release -DGODOTCPP_TARGET=template_release && cmake --build build
 A release build is a Baker shipping build: no reloads, live edits or write-back. To build
 against a local Baker checkout, add `-DFETCHCONTENT_SOURCE_DIR_BAKER=/path/to/baker`.
 
+The sample is a C# project as well as a GDScript one, so it runs in Godot's .NET build
+(4.7.2), with the .NET 8 SDK. Build its C# before opening it headless, and export it with
+the .NET export templates (`tools/fetch_template.py --mono`):
+
+```sh
+dotnet build sample/BakerSample.csproj        # the sample's C#, and the package from source
+dotnet pack csharp/Baker.Godot -c Release     # the NuGet package Baker.Godot
+godot --headless --path sample res://tests/cs_test.tscn   # the C# tests
+```
+
+## C#
+
+`csharp/Baker.Godot` is the C# API, published as the NuGet package `Baker.Godot`: typed
+calls over the `Baker` autoload, which the addon provides (a game installs both). See
+`csharp/Baker.Godot/README.md`.
+
+```csharp
+using BakerGodot;
+float height = Baker.Get("player.jump.height", 96f);
+var gravity = new Tweak<float>("world.gravity", 980f);   // current after every change
+int damage = Baker.CallFunction<int>("skirmish.damage", 6, 2, 0);
+```
+
 ## Plan
 
 1. **Runtime** (done): the autoload, Godot's file access, layers from the project file,

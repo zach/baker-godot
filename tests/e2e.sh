@@ -9,7 +9,8 @@ godot="$1"
 here="$(cd "$(dirname "$0")/.." && pwd)"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
-cp -r "$here/sample/." "$work/"
+. "$here/tests/copy_sample.sh"
+copy_sample "$work"
 rm -rf "$work/.godot"
 # The game the editor starts runs headless too.
 printf '\n[editor]\n\nrun/main_run_args="--headless"\n' >> "$work/project.godot"

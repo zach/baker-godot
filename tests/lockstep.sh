@@ -15,7 +15,8 @@ here="$(cd "$(dirname "$0")/.." && pwd)"
 work="$(mktemp -d)"
 host=""
 trap 'kill "$host" 2>/dev/null; rm -rf "$work"' EXIT
-cp -r "$here/sample/." "$work/"
+. "$here/tests/copy_sample.sh"
+copy_sample "$work"
 rm -rf "$work/.godot" "$work/data/agent.dta"
 "$godot" --headless --path "$work" --import >/dev/null 2>&1 || true
 "$godot" --headless --path "$work" --import >/dev/null 2>&1

@@ -18,6 +18,10 @@ config/features=PackedStringArray("4.7")
 
 feature_defines=PackedStringArray("server")
 
+[dotnet]
+
+project/assembly_name="BakerSample"
+
 [autoload]
 
 Baker="*res://addons/baker/baker.gd"

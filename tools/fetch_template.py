@@ -1,7 +1,10 @@
 """Installs Godot export templates without downloading the whole bundle.
 
-    python3 tools/fetch_template.py VERSION NAME...
-    python3 tools/fetch_template.py 4.7.2 linux_release.x86_64 windows_release_x86_64.exe
+    python3 tools/fetch_template.py [--mono] VERSION NAME...
+    python3 tools/fetch_template.py --mono 4.7.2 linux_release.x86_64 windows_release_x86_64.exe
+
+--mono: the .NET build's templates, which a project with C# exports with
+(VERSION.stable.mono).
 
 The templates come as one zip of over a gigabyte; this reads its directory and the named
 members with HTTP range requests, and puts them where Godot looks for them
@@ -33,19 +36,23 @@ class Remote(io.RawIOBase):
     def readinto(self, b):
         d = self.read(len(b)); b[:len(d)] = d; return len(d)
 
-def template_dir(version):
+def template_dir(version, mono):
     if os.name == "nt":
         base = os.path.join(os.environ["APPDATA"], "Godot")
     else:
         base = os.path.join(os.environ.get("XDG_DATA_HOME") or os.path.expanduser("~/.local/share"), "godot")
-    return os.path.join(base, "export_templates", version + ".stable")
+    return os.path.join(base, "export_templates", version + ".stable" + (".mono" if mono else ""))
 
 
 def main():
-    version, names = sys.argv[1], sys.argv[2:] + ["version.txt"]
+    args = sys.argv[1:]
+    mono = args[:1] == ["--mono"]
+    if mono:
+        args = args[1:]
+    version, names = args[0], args[1:] + ["version.txt"]
     url = (f"https://github.com/godotengine/godot/releases/download/{version}-stable/"
-           f"Godot_v{version}-stable_export_templates.tpz")
-    out = template_dir(version)
+           f"Godot_v{version}-stable{'_mono' if mono else ''}_export_templates.tpz")
+    out = template_dir(version, mono)
     os.makedirs(out, exist_ok=True)
     z = zipfile.ZipFile(io.BufferedReader(Remote(url), buffer_size=1 << 20))
     for info in z.infolist():

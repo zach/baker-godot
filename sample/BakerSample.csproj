@@ -1,0 +1,14 @@
+<Project Sdk="Godot.NET.Sdk/4.7.2">
+  <!-- The sample's C#: the C# tests and the skirmish's port, over Baker.Godot (the package
+       is built from source here; a game takes it from NuGet). -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <EnableDynamicLoading>true</EnableDynamicLoading>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <RootNamespace>BakerSample</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../csharp/Baker.Godot/Baker.Godot.csproj" />
+  </ItemGroup>
+</Project>
