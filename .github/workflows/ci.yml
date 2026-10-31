@@ -110,6 +110,10 @@ jobs:
         if: ${{ !cancelled() && steps.import.outcome == 'success' }}
         timeout-minutes: 5
         run: tests/lockstep.sh "$PWD/godot/${{ matrix.godot }}"
+      - name: The skirmish's C# port against the GDScript skirmish
+        if: ${{ !cancelled() && steps.import.outcome == 'success' }}
+        timeout-minutes: 10
+        run: tests/port.sh "$PWD/godot/${{ matrix.godot }}"
       - name: A release export, run
         if: ${{ !cancelled() && steps.import.outcome == 'success' && matrix.preset != '' }}
         timeout-minutes: 10

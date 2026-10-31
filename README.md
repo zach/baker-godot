@@ -246,6 +246,7 @@ godot --headless --path sample res://tests/runtime_test.tscn
 tests/e2e.sh path/to/godot                              # the demonstration, headless
 tests/agent.sh path/to/godot                            # an agent's loop
 tests/lockstep.sh path/to/godot                         # two peers agree on the data
+tests/port.sh path/to/godot-mono                        # the C# skirmish gives the GDScript's results
 tests/export.sh path/to/godot                           # a release export, run
 ```
 
@@ -294,6 +295,13 @@ float height = Baker.Get("player.jump.height", 96f);
 var gravity = new Tweak<float>("world.gravity", 980f);   // current after every change
 int damage = Baker.CallFunction<int>("skirmish.damage", 6, 2, 0);
 ```
+
+**The skirmish in C#.** `sample/skirmish/cs/` is the skirmish's economy, catalog and rules
+ported to C#, selected with `-- --skirmish cs`: the same data, scenarios and objectives,
+and the two sides' turns run on worker threads in parallel, each reading a
+`PublishedValues` snapshot taken once a turn, so a live edit or a layer reaches both sides
+whole at the next turn. `tests/port.sh` runs `sim` over seeds 1-5 with each and shows every
+run the same, outcome by outcome, and `compare` moving nothing.
 
 **Values worker threads read.** A `Baker.Get` is a call into the engine, on the main
 thread, about 8 µs. For a threaded simulation, declare the paths it reads on a

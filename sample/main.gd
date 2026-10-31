@@ -26,8 +26,15 @@ func _ready() -> void:
 	Baker.bind_function("skirmish.hits", SkirmishRules.hits_to_kill)
 	# The skirmish's cards are resources, one a file; the data holds what a layer changes.
 	Baker.bind_records("cards", "res://skirmish/cards")
-	add_child(preload("res://skirmish/match.gd").new())
 	Baker.bind_function("skirmish.card", _card_field)
+	# The skirmish's match: the GDScript one, or its C# port with `-- --skirmish cs`, which
+	# binds the same functions (and skirmish.hits and skirmish.card) over the GDScript ones.
+	var args := OS.get_cmdline_user_args()
+	var cs := args.find("--skirmish")
+	if cs >= 0 and cs + 1 < args.size() and args[cs + 1] == "cs":
+		add_child(load("res://skirmish/cs/SkirmishMatch.cs").new())
+	else:
+		add_child(preload("res://skirmish/match.gd").new())
 	if Baker.is_simulating():
 		Baker.sim_ready.call_deferred()
 

@@ -119,6 +119,10 @@ public static class Baker
         return (int)Required.Call("bind_records", prefix, dir, options).AsInt64();
     }
 
+    /// <summary>Every record of a table: {key: resource}.</summary>
+    public static Dictionary Records(string prefix) =>
+        Required.Call("records", prefix).AsGodotDictionary();
+
     /// <summary>A record by its key, or null.</summary>
     public static T? Record<T>(string prefix, string key) where T : Resource =>
         Required.Call("record", prefix, key).As<Resource>() as T;

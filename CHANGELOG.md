@@ -21,6 +21,10 @@ On Baker 0.7.0 and Godot 4.7.
   the frame's start after a change as an immutable `Snapshot`, read on any thread with no
   engine call (about 9 ns a read, against about 8 µs through the autoload). The C# test
   shows four threads never see half of a change; `tests/cs_bench.tscn` measures the costs.
+- **The skirmish in C#** (`sample/skirmish/cs/`, `-- --skirmish cs`): the match, with each
+  side's turn on a worker thread reading a published snapshot, the catalog, the rules and
+  the cards' field; `tests/port.sh` shows `sim` over seeds 1-5 giving the GDScript
+  skirmish's results run by run, and `compare` moving nothing.
 
 ## 0.2.0 - 2026-10-31
 

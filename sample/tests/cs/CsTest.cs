@@ -105,8 +105,11 @@ public partial class CsTest : Node
         var units = values.DeclareTable("units");
         var first = values.Current;
         Check(first.Get(x) == 0 && first.Get(y) == 0, "PublishedValues: declared values, published");
-        Check((long)first.Get(units)["tank"]["price"] == 50,
-            "  a table, whole, as .NET values: the tank's price");
+        var tank = (IReadOnlyDictionary<string, object>)first.Get(units)["tank"];
+        Check((long)tank["price"] == 50, "  a table, whole, as .NET values: the tank's price");
+        var opening = values.DeclareList("ai.opening");
+        Check(values.Current.Get(opening).Count == 3 && (string)values.Current.Get(opening)[0] == "infantry",
+            "  a list, whole: the AI's opening");
 
         long reads = 0, torn = 0, lastSeen = 0;
         var versions = new HashSet<long>();

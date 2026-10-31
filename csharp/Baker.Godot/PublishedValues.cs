@@ -57,14 +57,15 @@ public sealed class PublishedValues : IDisposable
         return new Published<T>(Add(() => Baker.Get(path, fallback)!), path);
     }
 
-    /// <summary>A keyed table the threads read whole: each record a read-only dictionary of
-    /// its fields, as .NET values (long, double, string, bool, and lists and tables of
-    /// them).</summary>
-    public Published<IReadOnlyDictionary<string, IReadOnlyDictionary<string, object>>> DeclareTable(
-        string path)
-    {
-        return new(Add(() => ToRecords(Baker.GetTable(path))), path);
-    }
+    /// <summary>A keyed table the threads read whole, as .NET values: a record is an
+    /// <c>IReadOnlyDictionary&lt;string, object&gt;</c> of its fields (long, double, string,
+    /// bool, lists and tables of them), a table of scalars their values.</summary>
+    public Published<IReadOnlyDictionary<string, object>> DeclareTable(string path) =>
+        new(Add(() => ToDotNet(Baker.GetTable(path))), path);
+
+    /// <summary>A list the threads read whole, as .NET values.</summary>
+    public Published<IReadOnlyList<object>> DeclareList(string path) =>
+        new(Add(() => ToDotNet(Baker.GetList(path))), path);
 
     int Add(Func<object> reader)
     {
@@ -100,16 +101,6 @@ public sealed class PublishedValues : IDisposable
             _tree.Disconnect(SceneTree.SignalName.ProcessFrame, _onFrame);
     }
 
-    static IReadOnlyDictionary<string, IReadOnlyDictionary<string, object>> ToRecords(
-        Godot.Collections.Dictionary table)
-    {
-        var records = new Dictionary<string, IReadOnlyDictionary<string, object>>();
-        foreach (var (key, record) in table)
-            if (record.VariantType == Variant.Type.Dictionary)
-                records[key.AsString()] = (IReadOnlyDictionary<string, object>)ToDotNet(record);
-        return new ReadOnlyDictionary<string, IReadOnlyDictionary<string, object>>(records);
-    }
-
     /// <summary>A Variant as a .NET value no engine call reads: a number, a string, a bool,
     /// a list or a table of them.</summary>
     static object ToDotNet(Variant v)
@@ -130,6 +121,8 @@ public sealed class PublishedValues : IDisposable
             }
             case Variant.Type.Dictionary:
             {
+                // In the data's order: a Dictionary enumerates in insertion order while
+                // nothing is removed, and nothing is.
                 var d = new Dictionary<string, object>();
                 foreach (var (key, value) in v.AsGodotDictionary())
                     d[key.AsString()] = ToDotNet(value);

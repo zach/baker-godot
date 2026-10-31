@@ -52,6 +52,12 @@ The C# test runs four threads reading two values the data keeps equal while both
 each frame, as a layer's text and as two live edits: over millions of reads, none saw one
 without the other, and every change reached the threads at the next frame's start.
 
+**Step 4, the skirmish in C#:** `sim` over seeds 1-5 on each gives the same 30 runs,
+outcome by outcome (the economy's army on turns 9, 9, 10, 9, 11 in both), and `compare`
+moves nothing; a dearer tank in the agent's layer fails both the same. The sides' turns run
+on two worker threads from one snapshot a turn; the random draws use the engine's generator
+per side, seeded as the GDScript match seeds it, which the port calls from the worker.
+
 ## With Baker
 
 Probably nothing new: the snapshot is built from what the runtime already reads. If a
