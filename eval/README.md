@@ -66,6 +66,46 @@ cannot all hold at once, so the agent must say which to give up and why, and tas
 content at scale (hundreds of records, as in the assessed games) where finding the right
 values is the work.
 
+## Phase 2, the harder round
+
+Run on 2026-10-31 at 9ea064d, same model and client, the skirmish's six tasks, three runs
+each, judged over seeds 1-5. Results in `results-phase2b.csv`, with each run's report.
+
+What changed from the first round: the economy charges each unit's upkeep every turn, and
+after its opening each side buys one thing or saves, drawn by its seed from `ai.weights`, so
+seeds play differently (blue's army on turn 9 to 11) and an outcome is not worked out on
+paper; a fourth objective bounds the army from below (not before turn 6). Two tasks are
+new: `card-scale`, over 40 card resources, eight of which cost 3 or more and deal less than
+4 a point; and `tank-on-3`, a request that `economy.tank_not_before_turn_4` forbids, judged
+by every objective still passing and the report naming that objective.
+
+**Result: 18 of 18 runs succeeded,** for $2.27.
+
+| task | success | tool calls (mean) | wall (mean) | what the agents did |
+|---|---|---|---|---|
+| `slow-army` | 3/3 | 6.0 | 30 s | HQ income 22, three times: above the shipped 20, judged over five seeds |
+| `fragile-tank` | 3/3 | 3.3 | 21 s | tank armor 2, three times |
+| `rule-armor` | 3/3 | 3.3 | 31 s | the rule redefined, and the tank's armor doubled or its hit points raised |
+| `two-complaints` | 3/3 | 7.0 | 36 s | armor 2, and income 20 or 24 |
+| `card-scale` | 3/3 | 6.3 | 31 s | all eight weak cards found by name, each set to exactly 4 a point, none other touched |
+| `tank-on-3` | 3/3 | 3.3 | 21 s | nothing changed; each report named the objective and why |
+
+**What the agents did.** With the economy no longer solvable on paper, the `slow-army` and
+`two-complaints` agents leaned on `sim` and `compare` over the five seeds, and two chose
+incomes the first round never did (22, 24), inside the window on every seed. In
+`card-scale` every run read the card files or `reference`, found the same eight cards,
+excluded fireball because the data prices it at 2, and wrote one override a card. In
+`tank-on-3` every run declined: one tried a shorter opening in its layer, saw the tank come
+on turn 2 and break the bound, removed the trial, and reported both the attempt and the
+objective; all three said a person would have to change the objective, separately.
+
+**Where they struggled: still nowhere these tasks reach.** The skill's loop (read the
+objectives, baseline, change, check, sim over seeds, compare) carries the tasks, including
+the one that must end in a refusal. What this sample cannot test: a game whose
+consequences of a change are not visible to the scenarios at all (feel, readability), and
+data at the scale of a shipped game, where an agent's reading of the files, not the
+commands, would be the cost.
+
 ## Protocol
 
 - **Tasks** (`harness.py`): each a person's complaint over a fresh copy of the repository,
