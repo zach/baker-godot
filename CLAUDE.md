@@ -19,7 +19,7 @@ Godot's terms; baker-dev's `INTEGRATIONS.md` is the policy. For work here:
 
 ## This repository
 
-- Godot 4.5 and godot-cpp `godot-4.5-stable`: one version line; a new minor version is a
+- Godot 4.7 and godot-cpp `10.0.0-stable` at API 4.7: one version line; a new minor version is a
   deliberate update.
 - No Godot engine source. The sample is written here from scratch.
 - Before each commit: `clang-format-18 -i src/*`, build `template_debug` and

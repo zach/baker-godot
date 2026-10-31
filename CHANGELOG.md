@@ -3,6 +3,14 @@
 Releases of Baker for Godot, newest first. Versions follow [semantic
 versioning](https://semver.org); before 1.0.0, a minor version may change the API.
 
+## Unreleased
+
+On Baker 0.7.0 and Godot 4.7.
+
+- **Godot 4.7.** The integration builds with godot-cpp 10.0.0 at API 4.7 and runs on Godot
+  4.7.2; the extension's `compatibility_minimum` is 4.7. CI, the export template and the
+  docs follow. Phase 3's plan is `dev/phase-3-plan.md`.
+
 ## 0.2.0 - 2026-10-31
 
 Phase 2: what a game shaped like a real one needs, proven on a second sample, a turn-based

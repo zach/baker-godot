@@ -1,7 +1,7 @@
 """Installs Godot export templates without downloading the whole bundle.
 
     python3 tools/fetch_template.py VERSION NAME...
-    python3 tools/fetch_template.py 4.5.1 linux_release.x86_64 windows_release_x86_64.exe
+    python3 tools/fetch_template.py 4.7.2 linux_release.x86_64 windows_release_x86_64.exe
 
 The templates come as one zip of over a gigabyte; this reads its directory and the named
 members with HTTP range requests, and puts them where Godot looks for them

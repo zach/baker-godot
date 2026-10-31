@@ -5,7 +5,7 @@ on:
   pull_request:
 
 env:
-  GODOT_VERSION: 4.5.1
+  GODOT_VERSION: 4.7.2
 
 jobs:
   format:
@@ -20,13 +20,13 @@ jobs:
       matrix:
         include:
           - os: ubuntu-24.04
-            godot: Godot_v4.5.1-stable_linux.x86_64
-            zip: Godot_v4.5.1-stable_linux.x86_64.zip
+            godot: Godot_v4.7.2-stable_linux.x86_64
+            zip: Godot_v4.7.2-stable_linux.x86_64.zip
             template: linux_release.x86_64
             preset: Linux
           - os: windows-2022
-            godot: Godot_v4.5.1-stable_win64_console.exe
-            zip: Godot_v4.5.1-stable_win64.exe.zip
+            godot: Godot_v4.7.2-stable_win64_console.exe
+            zip: Godot_v4.7.2-stable_win64.exe.zip
             template: windows_release_x86_64.exe
             preset: Windows
           # macOS on Apple silicon: every suite but two. The export would need the macOS
@@ -37,7 +37,7 @@ jobs:
           # took it. Last green at e318f84 (phase 2, step 7). To restore, uncomment the entry.
           # - os: macos-14
           #   godot: Godot.app/Contents/MacOS/Godot
-          #   zip: Godot_v4.5.1-stable_macos.universal.zip
+          #   zip: Godot_v4.7.2-stable_macos.universal.zip
           #   template: ""
           #   preset: ""
           #   no_editor_play: true
@@ -67,7 +67,7 @@ jobs:
       - name: Import the sample
         id: import
         # A fresh headless import of a project with a GDExtension can crash on exit in
-        # Godot 4.5.1, with godot-cpp's own example too; the second import is clean.
+        # Godot 4.5.1 and later, with godot-cpp's own example too; the second import is clean.
         run: |
           godot/${{ matrix.godot }} --headless --path sample --import || true
           godot/${{ matrix.godot }} --headless --path sample --import

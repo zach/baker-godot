@@ -5,7 +5,7 @@ description: Work on the Godot sample's tuning data as its agent - tune the plat
 
 # Working on the sample's data
 
-The sample (`sample/`) is a Godot 4.5 platformer whose tuning is Baker data. Its game is
+The sample (`sample/`) is a Godot 4.7 platformer whose tuning is Baker data. Its game is
 also its own tool: run headless, it checks, explains, simulates and compares. You work where
 a technical designer works: in data, never in the game's scripts or scenes.
 
@@ -26,7 +26,7 @@ sample/player.gd, *.tscn          the game. Not yours: its bound properties read
 ## The commands
 
 Build the extension once (README, "Building"). Then, from the repository's root, with
-`G="godot --headless --fixed-fps 60 --path sample --"` (Godot 4.5; `--fixed-fps 60` runs the
+`G="godot --headless --fixed-fps 60 --path sample --"` (Godot 4.7; `--fixed-fps 60` runs the
 game's frames as fast as it can, each 1/60 s of game time, so `sim` gives the same results
 in a fraction of the time). Godot runs the game in `sample/`, so a
 relative path you give (`--baker-results runs/before`, `compare`'s directories, `--baker-output`, `--baker-patch`)

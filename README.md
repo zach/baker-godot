@@ -1,6 +1,6 @@
 # Baker for Godot
 
-An integration of [Baker](https://github.com/zach/baker) with [Godot](https://godotengine.org) 4.5:
+An integration of [Baker](https://github.com/zach/baker) with [Godot](https://godotengine.org) 4.7:
 tuning data in layers (`default`, `local`, `agent`, experiments), each value knowing where
 it came from, and values tuned while playing written back to their line in the data.
 
@@ -261,7 +261,7 @@ the draft creates its tag.
 
 ## Building
 
-CMake fetches godot-cpp (4.5) and Baker 0.7.0 (its core, its host kit and its tools), and puts the library in
+CMake fetches godot-cpp (10.0.0, for Godot 4.7) and Baker 0.7.0 (its core, its host kit and its tools), and puts the library in
 `sample/addons/baker/bin/`:
 
 ```sh
