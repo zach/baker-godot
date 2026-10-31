@@ -187,6 +187,10 @@ machine runs it. `tests/agent.sh` runs the skill's loop end to end: the baseline
 jump of 120 passes `check`, `sim` and `compare`; A/B over the console; and a promote patch
 that applies as a one-line diff.
 
+A game that exports a dedicated server already has a harness for this: run headless with
+an AI in every seat, a match is a scenario and each turn a step, and `sim` and `compare`
+judge balance changes on the server build with no display.
+
 ## Exports
 
 A release export is a Baker shipping build: the data is packed (`export_presets.cfg`
