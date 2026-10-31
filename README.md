@@ -252,6 +252,13 @@ tests/export.sh path/to/godot                           # a release export, run
 With `BAKER_SHOTS=<dir>`, the end-to-end test also saves screenshots of the editor at each
 step (run it under a display, such as `xvfb-run`).
 
+## Releasing
+
+The Release workflow (Actions tab, "Run workflow", with the version `CHANGELOG.md` names)
+builds the extension for Linux and Windows, packs `addons/baker` with it, and drafts the
+GitHub release "Baker for Godot VERSION" with that version's changelog entry. Publishing
+the draft creates its tag.
+
 ## Building
 
 CMake fetches godot-cpp (4.5) and Baker 0.7.0 (its core, its host kit and its tools), and puts the library in
