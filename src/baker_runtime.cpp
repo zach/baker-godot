@@ -16,6 +16,7 @@
 #include <godot_cpp/classes/engine_debugger.hpp>
 #include <godot_cpp/classes/file_access.hpp>
 #include <godot_cpp/classes/os.hpp>
+#include <godot_cpp/classes/project_settings.hpp>
 #include <godot_cpp/classes/rendering_server.hpp>
 #include <godot_cpp/classes/resource_loader.hpp>
 #include <godot_cpp/classes/scene_tree.hpp>
@@ -107,6 +108,12 @@ void BakerRuntime::_bind_methods() {
     ClassDB::bind_method(D_METHOD("push_layer_text", "name", "text", "options"),
                          &BakerRuntime::push_layer_text, DEFVAL(Dictionary()));
     ClassDB::bind_method(D_METHOD("remove_layer", "name"), &BakerRuntime::remove_layer);
+    ClassDB::bind_method(D_METHOD("push_layer_dir", "name", "dir", "options"),
+                         &BakerRuntime::push_layer_dir, DEFVAL(Dictionary()));
+    ClassDB::bind_method(D_METHOD("layer_text", "name"), &BakerRuntime::layer_text);
+    ClassDB::bind_method(D_METHOD("set_layer_text", "name", "text"), &BakerRuntime::set_layer_text);
+    ClassDB::bind_method(D_METHOD("set_defines", "defines"), &BakerRuntime::set_defines);
+    ClassDB::bind_method(D_METHOD("get_defines"), &BakerRuntime::get_defines);
     ClassDB::bind_method(D_METHOD("bind_resource", "resource", "bindings"),
                          &BakerRuntime::bind_resource);
     ClassDB::bind_method(D_METHOD("unbind_resource", "resource"), &BakerRuntime::unbind_resource);
@@ -236,9 +243,15 @@ godot::Error BakerRuntime::open(const String& project_path) {
     });
     const std::string file = project_file(project_path);
     const bool game = !godot::Engine::get_singleton()->is_editor_hint();
+    defines_ = feature_defines();
+    const std::vector<std::string_view> defines(defines_.begin(), defines_.end());
     baker::host::LiveOptions options{
         .project = file,
         .reader = reader(),
+        .lister =
+            [](std::string_view dir, baker::Callback<void(std::string_view)> entry) {
+                return list_files(dir, entry);
+            },
         .disk_path =
             [](std::string_view path, baker::TextSink out) {
                 std::string disk;
@@ -257,6 +270,7 @@ godot::Error BakerRuntime::open(const String& project_path) {
             },
     };
     if (skip_local_) (void)options.open.skip.add("local");
+    options.open.defines = defines;
     if (auto r = live_->open(options); !r) {
         live_.reset();
         context_.reset();
@@ -401,6 +415,9 @@ void BakerRuntime::run_tool_command() {
         cache_.clear();
     };
     if (skip_local_) (void)tool_hooks_.open.skip.add("local");
+    defines_ = feature_defines();
+    tool_defines_.assign(defines_.begin(), defines_.end());
+    tool_hooks_.open.defines = tool_defines_;
     // The commands open a Config of their own, which binds the tweak registry, the bound
     // properties' among them: close this one first.
     live_.reset();
@@ -749,6 +766,73 @@ godot::Error BakerRuntime::push_layer_text(const String& name, const String& tex
         return fail(r.error());
     changed();
     return godot::OK;
+}
+
+std::vector<std::string> BakerRuntime::feature_defines() {
+    static constexpr const char* kGodot[] = {
+        "debug", "release", "editor", "template", "pc",  "mobile",           "web",
+        "linux", "windows", "macos",  "android",  "ios", "dedicated_server", "x86_64",
+        "arm64"};
+    godot::OS* os = godot::OS::get_singleton();
+    std::vector<std::string> out;
+    for (const char* f : kGodot)
+        if (os->has_feature(f)) out.push_back(f);
+    const godot::PackedStringArray custom = godot::ProjectSettings::get_singleton()->get_setting(
+        "baker/feature_defines", godot::PackedStringArray());
+    for (const String& f : custom) {
+        const std::string name = to_std(f);
+        if (os->has_feature(f) && std::find(out.begin(), out.end(), name) == out.end())
+            out.push_back(name);
+    }
+    return out;
+}
+
+godot::Error BakerRuntime::push_layer_dir(const String& name, const String& dir,
+                                          const Dictionary& options) {
+    if (!config()) return godot::ERR_UNCONFIGURED;
+    if (hold([=, this] { (void)push_layer_dir(name, dir, options); })) return godot::OK;
+    std::string names[2];
+    if (auto r = config()->push_layer_dir(to_std(name), to_std(dir), layer_options(options, names));
+        !r)
+        return fail(r.error());
+    changed();
+    return godot::OK;
+}
+
+String BakerRuntime::layer_text(const String& name) const {
+    if (!config()) return {};
+    std::string text;
+    if (auto r = config()->layer_text(to_std(name), baker::string_out(text)); !r) {
+        godot::UtilityFunctions::push_error("Baker: ", to_godot(baker::to_string(r.error())));
+        return {};
+    }
+    return to_godot(text);
+}
+
+godot::Error BakerRuntime::set_layer_text(const String& name, const String& text) {
+    if (!config()) return godot::ERR_UNCONFIGURED;
+    if (hold([=, this] { (void)set_layer_text(name, text); })) return godot::OK;
+    if (auto r = config()->set_layer_text(to_std(name), to_std(text)); !r) return fail(r.error());
+    changed_since();
+    return godot::OK;
+}
+
+godot::Error BakerRuntime::set_defines(const godot::PackedStringArray& defines) {
+    if (!config()) return godot::ERR_UNCONFIGURED;
+    if (hold([=, this] { (void)set_defines(defines); })) return godot::OK;
+    std::vector<std::string> names;
+    for (const String& d : defines) names.push_back(to_std(d));
+    const std::vector<std::string_view> views(names.begin(), names.end());
+    if (auto r = config()->set_defines(views); !r) return fail(r.error());
+    defines_ = std::move(names);
+    changed_since();
+    return godot::OK;
+}
+
+godot::PackedStringArray BakerRuntime::get_defines() const {
+    godot::PackedStringArray out;
+    for (const std::string& d : defines_) out.push_back(to_godot(d));
+    return out;
 }
 
 godot::Error BakerRuntime::remove_layer(const String& name) {

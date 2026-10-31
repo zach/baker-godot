@@ -98,6 +98,27 @@ public:
     // outside the game reaches no other file. Write-back refuses its values: it has no file.
     godot::Error push_layer_text(const godot::String& name, const godot::String& text,
                                  const godot::Dictionary& options);
+    // A directory of layers, for content packs, mods and plugins: each .dta file in `dir` is a
+    // layer named by its file, and each subdirectory that holds a layer.dta one named by the
+    // subdirectory, in the order dir/order.dta lists, then by name. Listed again at every
+    // reload, so a pack dropped in merges and one removed goes; watched as a project's
+    // layers are. Options as push_layer's; remove_layer(name) removes them all.
+    godot::Error push_layer_dir(const godot::String& name, const godot::String& dir,
+                                const godot::Dictionary& options);
+    // A layer as text, for a peer that must hold the same layer (a lobby's settings, sent by
+    // its host): reads back to the same tree, in every build. Empty, with the error pushed,
+    // for an unknown layer. "scratch" gives the live edits as a layer.
+    [[nodiscard]] godot::String layer_text(const godot::String& name) const;
+    // A text layer's text replaced in place (push_layer_text's), as a peer receives it again;
+    // the same text changes nothing.
+    godot::Error set_layer_text(const godot::String& name, const godot::String& text);
+    // The host's defines, for #ifdef and a project layer's (when ...): at open, the build's
+    // feature tags (OS.has_feature) among Godot's own (debug, release, pc, linux, ...) and
+    // those the project setting baker/feature_defines names (a dedicated server's "server",
+    // say). set_defines replaces them while the game runs: the layers that tested a changed
+    // name are read again.
+    godot::Error set_defines(const godot::PackedStringArray& defines);
+    [[nodiscard]] godot::PackedStringArray get_defines() const;
     // Removes a layer, leaving no trace: what it set goes back to the layers below.
     godot::Error remove_layer(const godot::String& name);
     // Binds a Resource's properties to paths, as a BakerBinding binds a node's: the same
@@ -252,6 +273,9 @@ private:
     void run_tool_command();
     void bind_functions(baker::Context& ctx);
     void bind_into(baker::Context& ctx, baker::Symbol name);
+    // The build's feature tags that are defines: Godot's own that hold, and those the project
+    // setting baker/feature_defines names.
+    [[nodiscard]] static std::vector<std::string> feature_defines();
     // The Context scripts run in: a tool command's or sim's while one runs, else the game's.
     [[nodiscard]] baker::Context* script_context() noexcept;
     godot::Variant evaluated(const baker::Expected<baker::Node>& result);
@@ -270,8 +294,9 @@ private:
     bool locked_ = false;
     std::vector<std::function<void()>> held_;  // what waits for apply_held()
     godot::Array last_written_;
-    godot::Dictionary records_;        // bind_records: prefix -> {key: resource}
-    godot::Dictionary record_tables_;  // a record's script class -> its prefix
+    std::vector<std::string> defines_;  // the host's, as the Config has them
+    godot::Dictionary records_;         // bind_records: prefix -> {key: resource}
+    godot::Dictionary record_tables_;   // a record's script class -> its prefix
 
     // Live binds the Config's tools into the Context, which outlives it.
     std::unique_ptr<baker::Context> context_;
@@ -285,6 +310,7 @@ private:
     std::string tool_project_;            // the project file, as the commands open it
     std::string tool_output_;             // what the command wrote
     baker::host::CommandHooks tool_hooks_;
+    std::vector<std::string_view> tool_defines_;  // views into defines_, for the command
     const baker::Config* tool_config_ = nullptr;  // the command's, once it has loaded
     baker::Context* tool_context_ = nullptr;      // the command's, while its data is loaded
     std::unique_ptr<baker::host::SimRun> sim_;    // --baker sim, in progress

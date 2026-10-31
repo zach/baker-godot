@@ -157,8 +157,22 @@ String name_of(godot::Object& o) {
     return o.to_string();
 }
 
+// The plugin a node or resource belongs to: the directory its scene, or its own file, is in
+// ("res://plugins/cannon/cannon.tscn": "cannon").
+String plugin_of(godot::Object& o) {
+    String file;
+    if (const auto* n = godot::Object::cast_to<godot::Node>(&o)) {
+        const godot::Node* scene = n->get_owner() ? n->get_owner() : n;
+        file = scene->get_scene_file_path();
+    } else if (const auto* r = godot::Object::cast_to<godot::Resource>(&o)) {
+        file = r->get_path();
+    }
+    return file.is_empty() ? String() : file.get_base_dir().get_file();
+}
+
 // "units.{kind}.hp" with the node's `kind` in place of {kind}; empty, and `error` set, if
-// the node has no such property or it is empty.
+// the node has no such property or it is empty. {plugin}, when the node has no `plugin`,
+// is the plugin it belongs to (plugin_of).
 String resolve(const String& path, godot::Object& target, String& error) {
     String out;
     int64_t at = 0;
@@ -175,7 +189,9 @@ String resolve(const String& path, godot::Object& target, String& error) {
         }
         out += path.substr(at, open - at);
         const godot::StringName key = path.substr(open + 1, close - open - 1);
-        const Variant v = target.get(key);
+        Variant v = target.get(key);
+        if (v.get_type() == Variant::NIL && key == godot::StringName("plugin"))
+            v = plugin_of(target);
         const String text = v.get_type() == Variant::NIL ? String() : String(v);
         if (text.is_empty()) {
             error = name_of(target) + " has no " + String(key) + " for " + path;

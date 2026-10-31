@@ -2,6 +2,10 @@
 (project
    (layers
       (default "data/tuning.dta")
+      ; Each plugin's pack: plugins/NAME/layer.dta, a layer named NAME (or a .dta file there).
+      (plugins (dir "plugins") optional)
+      ; A dedicated server's values: in the stack only where the build defines `server`.
+      (server "data/server.dta" (when server))
       ; Your own tuning, kept out of version control in Godot's user:// directory.
       ; dev_only: an export leaves it out, and a shipping build never reads it.
       (local "user://baker/local.dta" optional dev_only)

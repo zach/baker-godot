@@ -1,0 +1,5 @@
+; A match's settings as the build reads them: a dedicated server build (feature tag `server`)
+; sets a turn's time limit in its own layer, data/server.dta.
+(scenario match (desc "The turn's time limit this build reads")
+   (steps 1)
+   (objectives match.turn_seconds))

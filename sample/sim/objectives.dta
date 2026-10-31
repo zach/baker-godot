@@ -26,3 +26,7 @@
 (objective cards.strike_upgrades (desc "Strike upgrades to bash, a card named in the data")
    (measure {== {skirmish.card strike upgrade} bash})
    (pass $value))
+
+(objective match.turn_seconds (desc "A turn's time limit: 30 on a server build, else none")
+   (measure {config.get match.turn_seconds})
+   (pass {or {== $value 0} {== $value 30}}))

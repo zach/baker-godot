@@ -63,6 +63,19 @@ the remote inspector sends, and checks the diff.
   Resource's properties as a `BakerBinding` binds a node's, with the same shared tweaks; a
   shader's parameters are a `ShaderMaterial`'s (`"shader_parameter/glow"`), so one path
   can feed a script's value and a shader. It returns the binding; `unbind_resource` ends it.
+- **Builds, plugins and lobbies.**
+  - The build's feature tags are defines: Godot's own (`debug`, `release`, `pc`, `linux`,
+    ...) and the custom tags the project setting `baker/feature_defines` lists. A project
+    layer `(server "data/server.dta" (when server))` is in a dedicated server's export and
+    no other; `set_defines` changes them while the game runs.
+  - A directory of layers, `(plugins (dir "plugins") optional)` in the project file or
+    `Baker.push_layer_dir("mods", "user://mods")` from the game: each `.dta` file, and each
+    folder with a `layer.dta`, is a layer, found again at every reload, in an export too. A
+    plugin's scene binds `"minigames.{plugin}.gravity"`, `{plugin}` being its folder's name
+    (or the node's own `plugin`), so its pack supplies it and write-back lands in its file.
+  - A lobby's settings: `Baker.layer_text("lobby")` on the host, `push_layer_text` on a
+    peer, and `set_layer_text` when they come again; `sample/skirmish/peer.gd` sends them
+    before the fingerprints are compared.
 - **Records that are resources.** For a game whose content is the engine's own resources,
   a file a card, Baker is the layers above them: `Baker.bind_records("cards",
   "res://skirmish/cards")` binds every resource in the directory, the properties under its

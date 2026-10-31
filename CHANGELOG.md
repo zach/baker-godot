@@ -50,6 +50,13 @@ On Baker 0.7.0.
 - **`bind_resource(resource, bindings)`** binds a Resource's properties on the shared
   tweaks, a shader's parameters among them; a property that holds nothing yet binds as
   the type it declares.
+- **Builds, plugins and lobbies.** The build's feature tags as defines (Godot's own, and
+  those `baker/feature_defines` lists), for `#ifdef` and a project layer's `(when ...)`;
+  `set_defines`, `get_defines`. `push_layer_dir` and a project's `(dir ...)` layers over
+  Godot's file access, in exports too; `{plugin}` in a binding's path, the folder of the
+  node's scene. `layer_text` and `set_layer_text`, for a lobby's layer; the lockstep peers
+  send it. The sample's `cannon` plugin, a server layer, and a `match` scenario that the
+  export test runs as a server build.
 - **Records that are resources.** `bind_records(prefix, dir, {key, group})` binds every
   resource of a directory by its `@export_group("Tuning")` properties, one record a file,
   in exports too; `record`, `records`, `unbind_records`. A property referencing a record is

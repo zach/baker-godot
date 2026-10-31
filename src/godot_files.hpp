@@ -27,9 +27,9 @@ namespace baker_godot {
 // where the tool runs).
 [[nodiscard]] bool write_output(const std::string& path, std::string_view text);
 
-// The files in a directory Baker names, through Godot's file access (an export's pack too):
-// `file` gets each one's path, the directory's joined with its name. False if there is no
-// such directory.
+// The entries of a directory Baker names, files then subdirectories, through Godot's file
+// access (an export's pack too): `file` gets each one's path, the directory's joined with
+// its name. False if there is no such directory.
 [[nodiscard]] bool list_files(std::string_view dir,
                               const baker::Callback<void(std::string_view path)>& file);
 

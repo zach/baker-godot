@@ -24,6 +24,10 @@
    {do (($hit {- {+ $attack {* $level {config.get rules.level_bonus}}} $armor}))
       {if {< $hit 1} 1 $hit}}}
 
+; A match: a server build sets its own (data/server.dta).
+(match
+   (turn_seconds 0 (@desc "A turn's time limit, in seconds; 0: none")))
+
 ; The cards are resources, one a file (skirmish/cards/*.tres): each file holds a card's own
 ; values, and the data only what it changes, by the card's name. A reference to another card
 ; is its name; the scaling curve is points (level multiplier).

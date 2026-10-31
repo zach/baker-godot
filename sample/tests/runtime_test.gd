@@ -30,7 +30,8 @@ func _ready() -> void:
 func run() -> void:
 	check(Baker.is_open(), "the project file opens")
 	var names := Baker.get_layers().map(func(l): return l["name"])
-	check(names == ["default", "local", "agent", "floaty", "piercing", "scratch"],
+	check(names == ["default", "plugins", "cannon", "server", "local", "agent", "floaty", "piercing",
+		"scratch"],
 		"layers from the project file, bottom to top: %s" % [names])
 
 	# A player with one property the data has and one it lacks.
@@ -135,7 +136,7 @@ func run() -> void:
 	check(bound.size() == 1 and bound[0]["object_id"] == player.get_instance_id()
 		and bound[0]["path"] == "player.jump.height",
 		"session() lists the bindings with their objects: %s" % [bound])
-	check(session["layers"].size() == 6, "session() gives the layers")
+	check(session["layers"].size() == 9, "session() gives the layers")
 	Baker.clear_scratch("player/run/speed")
 	check(player.run_speed == 220.0, "discarded, the property returns to the data's value")
 	check(binding.capture() == 0, "which is not taken for an edit")
@@ -178,7 +179,8 @@ func run() -> void:
 	check(Baker.push_layer("pack", "user://baker/pack.dta", {"below": "local"}) == OK,
 		"push_layer: a content pack below local")
 	check(Baker.get_layers().map(func(l): return l["name"])
-		== ["default", "pack", "local", "agent", "floaty", "piercing", "scratch"],
+		== ["default", "plugins", "cannon", "server", "pack", "local", "agent", "floaty", "piercing",
+			"scratch"],
 		"in its place in the stack")
 	check(SkirmishCatalog.units().has("scout") and SkirmishCatalog.units()["tank"]["price"] == 40,
 		"its records merge into the table: a new unit, a retuned price")
@@ -318,6 +320,66 @@ func run() -> void:
 		"a call that fails gives null, and says why: %s" % Baker.get_last_error())
 	check(Baker.call_function("skirmish.damage", [Vector2(1, 2), 0, 0]) == null,
 		"an argument is one value: a Vector2 is a list, which the rule cannot add")
+
+	# Builds: the feature tags that are defines, and a layer for a server build.
+	var defines := Baker.get_defines()
+	check(defines.has("debug"), "the build's feature tags are defines: %s" % [defines])
+	check(Baker.get_value("match.turn_seconds", -1) == 0, "  a build without `server` leaves its layer out")
+	var as_server := defines.duplicate()
+	as_server.append("server")
+	check(Baker.set_defines(as_server) == OK and Baker.get_value("match.turn_seconds", -1) == 30,
+		"  set_defines: with `server`, its (when server) layer is in")
+	Baker.set_defines(defines)
+	check(Baker.get_value("match.turn_seconds", -1) == 0, "  and out again")
+
+	# Plugins: a pack each, found in a directory; a plugin's scene binds under its own name.
+	var cannon: Node = load("res://plugins/cannon/cannon.tscn").instantiate()
+	add_child(cannon)
+	check(cannon.gravity == 700.0, "a plugin's scene binds minigames.{plugin}.gravity from its own pack")
+	cannon.free()
+	DirAccess.make_dir_recursive_absolute("user://baker/mods/kite")
+	f = FileAccess.open("user://baker/mods/kite/layer.dta", FileAccess.WRITE)
+	f.store_string("(minigames (kite (speed 5)))\n")
+	f.close()
+	check(Baker.push_layer_dir("mods", "user://baker/mods", {"below": "local"}) == OK
+		and Baker.get_layers().map(func(l): return l["name"]).has("kite"),
+		"push_layer_dir: a directory of mods found after startup, a layer each")
+	var kite: Node = load("res://tests/kite_probe.gd").new()
+	var kite_binding := BakerBinding.new()
+	kite_binding.bindings = {"speed": "minigames.{plugin}.speed"}
+	kite.add_child(kite_binding)
+	add_child(kite)
+	check(kite.speed == 5.0, "  a mod's node binds under its plugin's name")
+	Baker.set_value("minigames.kite.speed", 7.0)
+	check(Baker.write_back("minigames.kite.speed") == OK
+		and FileAccess.get_file_as_string("user://baker/mods/kite/layer.dta").contains("(speed 7"),
+		"  write-back lands in the mod's own file: %s"
+			% FileAccess.get_file_as_string("user://baker/mods/kite/layer.dta").strip_edges())
+	Baker.clear_scratch()
+	f = FileAccess.open("user://baker/mods/extra.dta", FileAccess.WRITE)
+	f.store_string("(minigames (extra (on 1)))\n")
+	f.close()
+	Baker.reload()
+	check(Baker.get_value("minigames.extra.on", 0) == 1, "  a mod dropped in merges at the next reload")
+	DirAccess.remove_absolute("user://baker/mods/extra.dta")
+	Baker.reload()
+	check(Baker.get_value("minigames.extra.on", 0) == 0
+		and not Baker.get_layers().map(func(l): return l["name"]).has("extra"), "  and one removed goes")
+	kite.free()
+	Baker.remove_layer("mods")
+	DirAccess.remove_absolute("user://baker/mods/kite/layer.dta")
+	DirAccess.remove_absolute("user://baker/mods/kite")
+	DirAccess.remove_absolute("user://baker/mods")
+
+	# A lobby: a layer as text, for a peer, and replaced in place when it comes again.
+	Baker.push_layer_text("lobby", "(match (turn_seconds 45))", {})
+	var lobby := Baker.layer_text("lobby")
+	check(lobby.contains("turn_seconds 45"), "layer_text: the lobby's layer, to send: %s" % lobby.strip_edges())
+	check(Baker.set_layer_text("lobby", "(match (turn_seconds 60))") == OK
+		and Baker.get_value("match.turn_seconds", 0) == 60
+		and Baker.get_layers()[Baker.get_layers().size() - 2]["name"] == "lobby",
+		"set_layer_text: received again, replaced in its place")
+	Baker.remove_layer("lobby")
 
 	# A reload lands at the frame's start: a node processed before every other sees it in the
 	# same frame as one processed after.

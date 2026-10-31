@@ -61,10 +61,10 @@ bool write_output(const std::string& path, std::string_view text) {
 bool list_files(std::string_view dir, const baker::Callback<void(std::string_view)>& file) {
     const godot::String d = to_godot(godot_path(dir));
     if (!godot::DirAccess::dir_exists_absolute(d)) return false;
-    const godot::PackedStringArray names = godot::DirAccess::get_files_at(d);
     std::string base(dir);
     if (!base.empty() && base.back() != '/') base += '/';
-    for (const godot::String& n : names) file(base + to_std(n));
+    for (const godot::String& n : godot::DirAccess::get_files_at(d)) file(base + to_std(n));
+    for (const godot::String& n : godot::DirAccess::get_directories_at(d)) file(base + to_std(n));
     return true;
 }
 

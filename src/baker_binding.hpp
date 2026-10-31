@@ -14,7 +14,9 @@
 // node's own scene value standing.
 //
 // A path may take a key from the node: "units.{kind}.hp" reads the node's `kind` when it
-// binds, so one binding in a base scene serves every scene that inherits it.
+// binds, so one binding in a base scene serves every scene that inherits it. {plugin}, for
+// a node with no `plugin`, is the directory its scene is in: a plugin's scenes bind under
+// their plugin's own name ("minigames.{plugin}.gravity"), which the plugin's pack supplies.
 //
 // Types: bool, int, float, String, StringName, Vector2, Vector3, Color; a Curve, as its
 // points; and a reference to a record (Baker.bind_records), as the record's key.
