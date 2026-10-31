@@ -1,0 +1,10 @@
+[gd_resource type="Resource" script_class="SkirmishCard" load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://skirmish/card.gd" id="1"]
+
+[resource]
+script = ExtResource("1")
+title = "Bramble"
+text = "Deal 11 damage."
+cost = 2
+damage = 11

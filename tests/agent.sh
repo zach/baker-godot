@@ -79,7 +79,7 @@ rows = {r["path"]: r for r in csv.DictReader(open(sys.argv[1], encoding="utf-8")
 r = rows["player.jump.height"]
 assert (r["value"], r["min"], r["max"], r["layer"], r["file"], r["line"]) == ("96.0", "16.0", "320.0", "default", "data/tuning.dta", "10"), r
 assert rows["minigames.cannon.gravity"]["desc"] == "The cannonball's fall, px/s²", rows["minigames.cannon.gravity"]
-assert rows["cards.strike.upgrade"]["one_of"] == "bash fireball strike", rows["cards.strike.upgrade"]
+assert {"bash", "fireball", "strike"} <= set(rows["cards.strike.upgrade"]["one_of"].split()), rows["cards.strike.upgrade"]
 PY
 # check holds the data to the bound properties' tweaks: a value of the wrong type, or out of
 # the property's range, fails it; a misspelled key beside them is a warning.
@@ -177,7 +177,7 @@ rm "$work/sim/scenarios/typo.dta"
 printf '(player (jump (height 200)))\n' > "$work/data/agent.dta"
 sim over; compare before over over.json; status=$?
 [ "$status" -eq 1 ]; check $? "a jump of 200: compare exits 1"
-json over.json 'd["schema"] == "baker.compare/1" and d["broke"] == 1 and {o["name"]: o["moved"] for o in d["objectives"]} == {"cards.fireball_cost": "same", "cards.strike_upgrades": "same", "duel.tank_holds": "same", "duel.tank_not_a_wall": "same", "economy.tank_by_turn_5": "same", "economy.tank_not_before_turn_4": "same", "economy.army_by_turn_10": "same", "match.turn_seconds": "same", "jump.apex": "same", "reach.first_platform": "fixed", "reach.not_second_platform": "broke"}'
+json over.json 'd["schema"] == "baker.compare/1" and d["broke"] == 1 and {o["name"]: o["moved"] for o in d["objectives"]} == {"cards.fireball_cost": "same", "cards.strike_upgrades": "same", "duel.tank_holds": "same", "duel.tank_not_a_wall": "same", "economy.tank_by_turn_5": "same", "economy.tank_not_before_turn_4": "same", "economy.army_not_before_turn_6": "same", "economy.army_by_turn_11": "same", "match.turn_seconds": "same", "jump.apex": "same", "reach.first_platform": "fixed", "reach.not_second_platform": "broke"}'
 check $? "  it fixed the first platform and broke the second: not done"
 printf '; The agent: a higher jump, to clear the first platform.\n(player (jump (height 120)))\n' \
     > "$work/data/agent.dta"
@@ -201,8 +201,8 @@ sim turns; [ $? -eq 1 ]; check $? "a dearer tank: the economy scenario fails (ex
 compare before turns turns.json
 json turns.json '{o["name"]: o["moved"] for o in d["objectives"]}["economy.tank_by_turn_5"] == "broke"'
 check $? "  compare names the objective, judged in turns"
-json turns/results.json '[r["ended"] for r in d["runs"] if r["scenario"] == "economy"] == ["army_ready"] * 3'
-check $? "  each run ended when the army was ready, not at its length"
+json before/results.json '[r["ended"] for r in d["runs"] if r["scenario"] == "economy"] == ["army_ready"] * 3'
+check $? "  on the shipped data, each run ended when the army was ready, not at its length"
 cp "$work/jump.dta" "$work/data/agent.dta"
 
 # 4.

@@ -43,6 +43,10 @@
    (measure {skirmish.built_at tank})
    (pass {>= $value 4}))
 
-(objective economy.army_by_turn_10 (desc "Blue's army is ready by turn 10")
+(objective economy.army_not_before_turn_6 (desc "Nor before turn 6: the opening has a breath")
    (measure {if {== $ended army_ready} $steps 99})
-   (pass {<= $value 10}))
+   (pass {>= $value 6}))
+
+(objective economy.army_by_turn_11 (desc "Blue's army is ready by turn 11")
+   (measure {if {== $ended army_ready} $steps 99})
+   (pass {<= $value 11}))

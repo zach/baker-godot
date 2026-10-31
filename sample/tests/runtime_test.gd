@@ -148,7 +148,7 @@ func run() -> void:
 	kinds.sort()
 	check(kinds == ["artillery", "heli", "infantry", "tank"],
 		"get_value(\"units\", {}) is the unit table, by kind: %s" % [kinds])
-	check(units_table["tank"] == {"hp": 10, "move": 6, "attack": 10, "armor": 2, "price": 50},
+	check(units_table["tank"] == {"hp": 10, "move": 6, "attack": 10, "armor": 2, "price": 50, "upkeep": 3},
 		"a record is a Dictionary of its fields: %s" % [units_table["tank"]])
 	check(units_table["artillery"]["reach"] == [2, 3] and units_table["heli"]["flies"] == 1,
 		"a field of several values is an Array, a flag a number")
@@ -160,7 +160,7 @@ func run() -> void:
 		"the production menu reads the table whole: %s" % [SkirmishCatalog.affordable(50)])
 	check(Baker.get_value("units.tank.hp", {}) == {}, "a value that is not a table gives the fallback")
 	check(Baker.set_value("units.tank", {"price": 45}) == OK
-		and Baker.get_value("units.tank", {}) == {"hp": 10, "move": 6, "attack": 10, "armor": 2, "price": 45},
+		and Baker.get_value("units.tank", {}) == {"hp": 10, "move": 6, "attack": 10, "armor": 2, "price": 45, "upkeep": 3},
 		"a Dictionary set live sets the fields it names, and the record keeps the rest: %s"
 			% [Baker.get_value("units.tank", {})])
 	check(Baker.unsaved() == PackedStringArray(["units/tank/price"]),
@@ -265,7 +265,7 @@ func run() -> void:
 		"the units gone, their tweaks go: %d left" % [BakerBinding.shared_tweak_count()])
 
 	# Records: resources a file each, bound by one call, the data holding what it changes.
-	check(Baker.bind_records("cards", "res://skirmish/cards") == 3, "bind_records: three cards")
+	check(Baker.bind_records("cards", "res://skirmish/cards") == 40, "bind_records: forty cards, one call")
 	var strike: SkirmishCard = Baker.record("cards", "strike")
 	var bash: SkirmishCard = Baker.record("cards", "bash")
 	var fireball: SkirmishCard = Baker.record("cards", "fireball")

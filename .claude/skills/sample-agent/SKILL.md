@@ -83,9 +83,15 @@ random number: the same data and scenario give the same result on every seed.
   and stays 20 px below the second, 180 px up: the climb takes two jumps), `duel`
   (infantry takes 3 or 4 hits to destroy a tank), `cards` (the cards read the data), and
   `economy` (a match in turns: the opening's tank on turn 4 or 5, an army of
-  `economy.army_ready` units by turn 10; tune `economy.*`, `units.*.price` and
-  `buildings.*.income`). Several objectives bound a value from both sides: a change large
-  enough to fix one often breaks its twin, so aim inside the window and let `compare` say.
+  `economy.army_ready` units on turn 6 to 11). The economy: each turn a side earns its
+  buildings' `income` less its units' `upkeep`, builds its opening (`ai.opening`), then buys
+  one thing or saves, drawn by its seed with `ai.weights` (units, buildings with a `cost`,
+  `save`). After the opening, seeds play differently: judge a change over `--baker-seeds
+  1-5` or more, never one seed, and do not expect to work an outcome out by hand. Several
+  objectives bound a value from both sides: a change large enough to fix one often breaks
+  its twin, so aim inside the window and let `compare` say. If what a person asks cannot
+  pass every objective, do not make it pass some: say which objective stands in the way,
+  and propose the change to that objective separately.
 - **Rules:** the skirmish's damage is a script function in `data/skirmish.dta`, defined in
   its `#autorun`. To change a rule rather than a number, define it again in `agent.dta`'s
   own `#autorun`, whole, with its `(@doc ...)`; `sim` judges it as it judges a value.
