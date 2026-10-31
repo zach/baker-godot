@@ -1,7 +1,9 @@
 @tool
 ## The demonstration, end to end, in a headless editor (tests/e2e.sh runs it on a copy of
 ## the sample):
-##   1. play;
+##   0. the Data tab lists every value with where it comes from; a preset of layers is saved
+##      and applied;
+##   1. play: the game takes the preset's layers;
 ##   2. tune the jump height as the remote inspector does (its scene:set_object_property);
 ##   3. toggle the floaty experiment while playing;
 ##   4. stop;
@@ -32,6 +34,23 @@ func _ready() -> void:
 
 func run() -> void:
 	await wait(func(): return false, 2.0)
+	var rows := {}
+	for r: Dictionary in model.data_rows():
+		rows[r["path"]] = r
+	var height: Dictionary = rows.get("player.jump.height", {})
+	check(height.get("value") == 96 and height.get("source", {}).get("file") == "data/tuning.dta",
+		"0. the Data tab lists the data, with where each value comes from: %s" % [height])
+	var gravity: Dictionary = rows.get("minigames.cannon.gravity", {})
+	check(gravity.get("source", {}).get("layer") == "cannon",
+		"   a plugin's value, from its own pack, whose scene no one has open: %s" % [gravity])
+	var tree: Tree = dock.find_child("Data", true, false)
+	check(_tree_path(tree, ["player", "jump", "height"]) != null, "   grouped by path in the dock")
+	model.toggle("floaty", true)
+	model.save_preset("floaty")
+	model.toggle("floaty", false)
+	model.apply_preset("floaty")
+	check(model.presets().has("floaty") and _editor_layer_on("floaty"),
+		"   a preset of layers, saved and applied: %s" % [model.presets()])
 	var original := FileAccess.get_file_as_string(TUNING)
 	if shots != "":
 		EditorInterface.open_scene_from_path("res://main.tscn")
@@ -44,6 +63,7 @@ func run() -> void:
 	EditorInterface.play_main_scene()
 	check(await wait(func(): return model.running and _binding("jump_height") != {}, 30.0),
 		"1. the game runs and sends its bindings")
+	check(await wait(func(): return _layer_on("floaty"), 10.0), "   and takes the preset's layers")
 	if failures:
 		print("     running: %s, session: %s" % [model.running, model.session.keys()])
 		return finish()
@@ -120,6 +140,27 @@ func _unsaved_value(path: String) -> Variant:
 		if e["path"] == path:
 			return e["value"]
 	return null
+
+
+func _editor_layer_on(layer: String) -> bool:
+	for l: Dictionary in model.baker.get_layers():
+		if l["name"] == layer:
+			return l["enabled"]
+	return false
+
+
+## The item at `names` under the tree's root, or null.
+func _tree_path(tree: Tree, names: Array) -> TreeItem:
+	var item := tree.get_root()
+	for name: String in names:
+		var found: TreeItem = null
+		for child in item.get_children():
+			if child.get_text(0) == name:
+				found = child
+		if found == null:
+			return null
+		item = found
+	return item
 
 
 func _layer_on(layer: String) -> bool:

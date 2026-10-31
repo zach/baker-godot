@@ -26,9 +26,11 @@
 //                       {config.explain p}, {config.set p v}, {config.toggle layer}, ...
 //   --console-write     also config.write_back and config.promote
 //   --baker COMMAND...  run one of Baker's tool commands (check, reference, eval, diff,
-//                       promote --baker-patch, sim, compare) once the scene is ready, then quit;
-//                       --baker-output FILE writes its output there too. Shipping builds run sim
-//                       and compare only.
+//                       promote --baker-patch, sim, compare, csv) once the scene is ready,
+//                       then quit; --baker-output FILE writes its output there too. The
+//                       commands see the bound properties of every scene, those no one has
+//                       loaded too (addons/baker/scan.gd reads them from their files).
+//                       Shipping builds run sim and compare only.
 //
 // sim runs the project's scenarios (sim/scenarios.dta) from the game's own frames: before
 // each run it reloads the current scene, whose script calls sim_ready() once it is set up,
@@ -177,6 +179,10 @@ public:
                                            const godot::Variant& fallback) const;
     // get_value, cached until the data next changes: for one-off reads in GDScript.
     godot::Variant tweak(const godot::String& path, const godot::Variant& fallback);
+    // Every value in the data, as the game reads it: [{path, value}], a path for each value
+    // that is not a table of others ("units.tank.price"), in the data's order. For a view of
+    // the whole data, whichever scene is open.
+    [[nodiscard]] godot::Array data_paths() const;
     // {layer, file, line}; empty if the path is missing.
     [[nodiscard]] godot::Dictionary source(const godot::String& path) const;
     // Every contributor to the value, bottom to top: [{layer, value, file, line, standing}].
@@ -280,6 +286,7 @@ private:
     [[nodiscard]] baker::Context* script_context() noexcept;
     godot::Variant evaluated(const baker::Expected<baker::Node>& result);
     void finish_tool(int status);
+    int run_csv(const baker::host::CommandLine& line);
     bool debugger_message(const godot::String& message, const godot::Array& data);
 
     static BakerRuntime* singleton_;

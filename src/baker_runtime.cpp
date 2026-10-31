@@ -15,6 +15,7 @@
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/classes/engine_debugger.hpp>
 #include <godot_cpp/classes/file_access.hpp>
+#include <godot_cpp/classes/json.hpp>
 #include <godot_cpp/classes/os.hpp>
 #include <godot_cpp/classes/project_settings.hpp>
 #include <godot_cpp/classes/rendering_server.hpp>
@@ -133,6 +134,7 @@ void BakerRuntime::_bind_methods() {
                          DEFVAL(Variant()));
     ClassDB::bind_method(D_METHOD("tweak", "path", "fallback"), &BakerRuntime::tweak);
     ClassDB::bind_method(D_METHOD("source", "path"), &BakerRuntime::source);
+    ClassDB::bind_method(D_METHOD("data_paths"), &BakerRuntime::data_paths);
     ClassDB::bind_method(D_METHOD("explain", "path"), &BakerRuntime::explain);
     ClassDB::bind_method(D_METHOD("set_value", "path", "value"), &BakerRuntime::set_value);
     ClassDB::bind_method(D_METHOD("clear_scratch", "path"), &BakerRuntime::clear_scratch,
@@ -397,6 +399,16 @@ void BakerRuntime::run_tool_command() {
             stderr);
         return finish_tool(baker::host::kCommandError);
     }
+    if constexpr (!baker::kShipping) {
+        // The bindings of scenes no one has loaded, so reference and check know every
+        // tunable in the project (addons/baker/scan.gd), as if each scene were open.
+        const String scan = "res://addons/baker/scan.gd";
+        if (godot::ResourceLoader::get_singleton()->exists(scan)) {
+            const godot::Ref<godot::Script> script =
+                godot::ResourceLoader::get_singleton()->load(scan);
+            if (script.is_valid()) script->call("bind_unloaded", this);
+        }
+    }
     tool_project_ = project_file(project_path_);
     line->project = tool_project_;
     tool_hooks_.reader = reader();
@@ -431,7 +443,8 @@ void BakerRuntime::run_tool_command() {
         set_physics_process(true);
         return;
     }
-    int status = baker::host::run_command(*line, tool_hooks_);
+    int status =
+        line->command == "csv" ? run_csv(*line) : baker::host::run_command(*line, tool_hooks_);
     tool_config_ = nullptr;  // gone with the command
     if (status < 0) {
         std::fprintf(stderr, "baker: no command '%s'\n%s", tool_argv_[1],
@@ -439,6 +452,69 @@ void BakerRuntime::run_tool_command() {
         status = baker::host::kCommandError;
     }
     finish_tool(status);
+}
+
+namespace {
+
+// A CSV field: quoted when it holds a comma, a quote or a line break, its quotes doubled.
+std::string csv_field(const String& text) {
+    std::string s = to_std(text);
+    if (s.find_first_of(",\"\n\r") == std::string::npos) return s;
+    std::string out = "\"";
+    for (char c : s) {
+        if (c == '"') out += '"';
+        out += c;
+    }
+    return out + "\"";
+}
+
+}  // namespace
+
+// csv: every tweak as a row of a designer's spreadsheet, from the reference's tweaks:
+// path, type, value, default, min, max, step, one_of, layer, file, line, desc.
+int BakerRuntime::run_csv(const baker::host::CommandLine& line) {
+    baker::host::CommandLine reference = line;
+    reference.command = "reference";
+    reference.json = true;
+    reference.output = {};
+    const size_t start = tool_output_.size();
+    const int status = baker::host::run_command(reference, tool_hooks_);
+    const String json = to_godot(std::string_view(tool_output_).substr(start));
+    tool_output_.resize(start);
+    if (status != 0) return status;
+    const Dictionary doc = godot::JSON::parse_string(json);
+    const Array tweaks = Dictionary(doc.get("tweaks", Dictionary())).get("tweaks", Array());
+    std::string out = "path,type,value,default,min,max,step,one_of,layer,file,line,desc\n";
+    for (int64_t i = 0; i < tweaks.size(); ++i) {
+        const Dictionary t = tweaks[i];
+        const Variant range = t.get("range", Variant());
+        const Array r = range.get_type() == Variant::ARRAY ? Array(range) : Array();
+        const Variant source = t.get("source", Variant());
+        const Dictionary src =
+            source.get_type() == Variant::DICTIONARY ? Dictionary(source) : Dictionary();
+        const double step = t.get("step", 0.0);
+        const String fields[] = {
+            t.get("path", ""),
+            t.get("type", ""),
+            t.get("value", ""),
+            t.get("default", ""),
+            r.size() == 2 ? String(Variant(r[0])) : String(),
+            r.size() == 2 ? String(Variant(r[1])) : String(),
+            step != 0 ? String::num(step) : String(),
+            String(" ").join(godot::PackedStringArray(Array(t.get("one_of", Array())))),
+            src.get("layer", ""),
+            src.get("file", ""),
+            src.has("line") ? String::num_int64(int64_t(src["line"])) : String(),
+            t.get("desc", ""),
+        };
+        for (size_t f = 0; f < std::size(fields); ++f) {
+            if (f) out += ',';
+            out += csv_field(fields[f]);
+        }
+        out += '\n';
+    }
+    tool_output_ += out;
+    return 0;
 }
 
 void BakerRuntime::finish_tool(int status) {
@@ -1002,6 +1078,58 @@ Variant BakerRuntime::tweak(const String& path, const Variant& fallback) {
     const Variant v = get_value(path, fallback);
     cache_[path] = v;
     return v;
+}
+
+namespace {
+
+// The symbol a node's array is tagged by, if it is a tagged array.
+const baker::Array* tagged(const baker::Node& n) {
+    const baker::Array* a = n.array();
+    return a && a->size() > 0 && (*a)[0].try_sym() ? a : nullptr;
+}
+
+// Each value under `table`'s tagged children: a child whose values are all tagged arrays,
+// each tag once, is a table of its own; any other is a value at its path.
+void walk(std::span<const baker::Node> nodes, const String& prefix, Array& out) {
+    for (const baker::Node& n : nodes) {
+        const baker::Array* a = tagged(n);
+        if (!a) continue;
+        const String path = (prefix.is_empty() ? String() : prefix + String(".")) +
+                            to_godot((*a)[0].try_sym()->str());
+        const baker::Values values = a->values();
+        bool table = !values.empty();
+        std::vector<baker::Symbol> tags;
+        for (const baker::Node& v : values) {
+            const baker::Array* t = tagged(v);
+            if (!t) {
+                table = false;
+                break;
+            }
+            const baker::Symbol tag = *(*t)[0].try_sym();
+            if (std::find(tags.begin(), tags.end(), tag) != tags.end()) {
+                table = false;  // a list of records, (wave ...) (wave ...): one value
+                break;
+            }
+            tags.push_back(tag);
+        }
+        if (table) {
+            walk(std::span<const baker::Node>(values.begin(), values.end()), path, out);
+        } else {
+            Dictionary d;
+            d["path"] = path;
+            d["value"] = to_table(values);
+            out.push_back(d);
+        }
+    }
+}
+
+}  // namespace
+
+Array BakerRuntime::data_paths() const {
+    Array out;
+    if (!config()) return out;
+    walk(config()->root()->nodes(), String(), out);
+    return out;
 }
 
 Dictionary BakerRuntime::source(const String& path) const {

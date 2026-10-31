@@ -114,8 +114,12 @@ the remote inspector sends, and checks the diff.
   names as a live edit of its own, and a table read sees them.
 - **The editor plugin** (`addons/baker/plugin.cfg`):
   - a dock with **Layers** (toggle each, in the running game too; hover to see what a
-    layer changes), **Tweaks** (the edited scene's bound properties, their values and the
-    file and line each comes from), and **Session** (what the running game tuned, kept
+    layer changes; save the toggles as a preset, shared in the project setting
+    `baker/presets`, and "Play with" one: a game started afterwards takes the Layers tab's
+    toggles), **Data** (every value in the data and every bound property of every scene,
+    loaded or not, grouped by path, with the layer, file and line it comes from and its
+    whole chain on hover), **Tweaks** (the edited scene's bound properties, their values and
+    the file and line each comes from), and **Session** (what the running game tuned, kept
     after it stops, with Keep and Discard);
   - under each bound property in the inspector, every layer that has a say in its value,
     with its file and line, and which one wins.
@@ -161,7 +165,13 @@ carry over.
   godot --headless --path sample -- --baker eval --baker-json "{config.explain player.jump.height}"
   godot --headless --path sample -- --baker diff                 # what agent.dta changes
   godot --headless --path sample -- --baker promote --baker-patch agent.patch
+  godot --headless --path sample -- --baker csv --baker-output tweaks.csv  # a spreadsheet
   ```
+
+  The commands see the bound properties of every scene, not only those loaded:
+  `addons/baker/scan.gd` reads each packed scene's bindings, values and export hints from
+  its file without instantiating it. `csv` is every tweak a row (path, type, value,
+  default, min, max, step, one_of, layer, file, line, desc), for a designer's spreadsheet.
 
   These are Baker's own tool commands (its host kit), reading through Godot's file access.
   `--baker-output FILE` writes a command's result to a file too (a `user://` path as well); `promote`

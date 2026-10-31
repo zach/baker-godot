@@ -70,6 +70,17 @@ json ref.json 'any(t["path"] == "player.jump.height" for t in d["tweaks"]["tweak
 check $? "  lists the bound properties as tweaks"
 json ref.json '[(t["range"], t["step"]) for t in d["tweaks"]["tweaks"] if t["path"] == "player.jump.height"] == [([16, 320], 1)]'
 check $? "  with the range and step of each property's @export_range"
+json ref.json '[(t["range"], t["value"], t["source"]["layer"]) for t in d["tweaks"]["tweaks"] if t["path"] == "minigames.cannon.gravity"] == [([100, 2000], "700.0", "cannon")]'
+check $? "  and those of scenes no one has loaded: the cannon plugin's gravity, from its pack"
+tool tweaks.csv csv; check $? "csv: the tweaks, a row each, for a spreadsheet"
+"$py" - "$work/tweaks.csv" <<'PY'; check $? "  path, value, range and source, as a spreadsheet reads them"
+import csv, sys
+rows = {r["path"]: r for r in csv.DictReader(open(sys.argv[1], encoding="utf-8"))}
+r = rows["player.jump.height"]
+assert (r["value"], r["min"], r["max"], r["layer"], r["file"], r["line"]) == ("96.0", "16.0", "320.0", "default", "data/tuning.dta", "10"), r
+assert rows["minigames.cannon.gravity"]["desc"] == "The cannonball's fall, px/s²", rows["minigames.cannon.gravity"]
+assert rows["cards.strike.upgrade"]["one_of"] == "bash fireball strike", rows["cards.strike.upgrade"]
+PY
 # check holds the data to the bound properties' tweaks: a value of the wrong type, or out of
 # the property's range, fails it; a misspelled key beside them is a warning.
 bad() {  # bad BODY OUT: an agent's proposal, checked into $work/OUT; its exit status

@@ -50,6 +50,11 @@ content; emitting shapes from a GDScript class, until hand-written shapes prove 
 - **A live edit of one instance's bound property is an edit of its path,** and so of every
   instance that binds it: right for a type's stats. State a game derives from a stat (current
   hit points from the maximum) re-derives on `property_changed`.
+- **The editor sends its layers when a game starts:** the Layers tab, as set by hand or by
+  a preset, is what a game launched from the editor plays with, where it differs from the
+  project file's. Scanning scenes reads each packed scene's state (its nodes' properties,
+  its scripts' defaults and hints) without instantiating it; a stand-in Resource with
+  those properties is bound for tool commands, so their tweaks are a loaded scene's.
 - **Records bind by a call, not a project-file entry** (`bind_records(prefix, dir, {key,
   group})`): a game binds a directory of its resources where it loads them, and a tool
   command sees their tweaks once the scene is ready. The tunables are an `@export_group`,

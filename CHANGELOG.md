@@ -50,6 +50,12 @@ On Baker 0.7.0.
 - **`bind_resource(resource, bindings)`** binds a Resource's properties on the shared
   tweaks, a shader's parameters among them; a property that holds nothing yet binds as
   the type it declares.
+- **The dock's Data tab and presets.** Every value in the data and every bound property of
+  every scene, grouped by path, with its source and chain; presets of layer toggles
+  (`baker/presets`) that a game started afterwards takes. `addons/baker/scan.gd` reads the
+  bindings of scenes no one has loaded from their files, and the tool commands bind them,
+  so `reference` and `check` know every tunable; `data_paths()` lists the data. `--baker
+  csv` gives the tweaks as a spreadsheet.
 - **Turn scenarios.** The skirmish's match (`skirmish/match.gd`) plays a turn a step: the
   `economy` scenario is written in turns, ends on the game's own outcome (`until`, named
   `army_ready`), and judges outcomes over seeds; `agent.sh` shows a dearer tank breaking it

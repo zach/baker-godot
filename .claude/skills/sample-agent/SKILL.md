@@ -43,6 +43,7 @@ in the project is a change a person has to clean up.
 | `$G --baker compare --baker-before DIR --baker-after DIR` | Which objectives moved between two `sim --baker-results` directories, as `baker.compare/1` JSON; exit 1 if one broke. |
 | `$G --baker eval --baker-json "{config.explain player.jump.height}"` | A value and every layer that sets it, with file and line; any `{config...}` command, answered as the console answers. |
 | `$G --baker diff` | Exactly what `agent.dta` changes: path, old value, new value. |
+| `$G --baker csv` | Every tweak a row: path, value, default, range, allowed values, file and line. Quicker to scan than the JSON when you want every value at once. |
 | `$G --baker promote --baker-patch FILE` | What promotion would write into `tuning.dta`, as a diff a person reviews and applies with `git apply -p1` from `sample/`. It writes nothing else: promotion is a person's decision. |
 | `python3 tests/console.py PORT "(1 {cmd})"` | A command in a game a person is running with `-- --console-port PORT` (`0`: a free port, which the game prints). Use it only when asked to. |
 

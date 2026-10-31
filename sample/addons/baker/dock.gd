@@ -1,13 +1,18 @@
 @tool
-## The Baker dock: Layers (toggle them, see what each changes), Tweaks (the edited scene's
-## bound properties and where their values come from), and Session (what the game tuned,
-## to Keep or Discard).
+## The Baker dock: Layers (toggle them, see what each changes, save and apply presets that a
+## game started afterwards takes), Data (every value in the data and every bound property of
+## every scene, grouped by path, with where each comes from), Tweaks (the edited scene's
+## bound properties), and Session (what the game tuned, to Keep or Discard).
 extends VBoxContainer
 
 const Session := preload("res://addons/baker/session.gd")
 
 var model: Session
 var _layers: VBoxContainer
+var _layer_list: VBoxContainer
+var _presets: OptionButton
+var _preset_name: LineEdit
+var _data: Tree
 var _tweaks: Tree
 var _status: Label
 var _unsaved: Tree
@@ -26,6 +31,39 @@ func _init(m: Session) -> void:
 	_layers = VBoxContainer.new()
 	_layers.name = "Layers"
 	tabs.add_child(_layers)
+	_layer_list = VBoxContainer.new()
+	_layers.add_child(_layer_list)
+	var presets := HBoxContainer.new()
+	_layers.add_child(presets)
+	_presets = OptionButton.new()
+	_presets.tooltip_text = "Play with: set the layers as a preset has them"
+	_presets.item_selected.connect(func(i):
+		if i > 0:
+			model.apply_preset(_presets.get_item_text(i)))
+	presets.add_child(_presets)
+	_preset_name = LineEdit.new()
+	_preset_name.placeholder_text = "Preset name"
+	_preset_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	presets.add_child(_preset_name)
+	var save := Button.new()
+	save.text = "Save"
+	save.tooltip_text = "Save these layers' toggles as a preset (project setting baker/presets)"
+	save.pressed.connect(func():
+		if not _preset_name.text.strip_edges().is_empty():
+			model.save_preset(_preset_name.text.strip_edges()))
+	presets.add_child(save)
+
+	_data = Tree.new()
+	_data.name = "Data"
+	_data.columns = 3
+	_data.hide_root = true
+	_data.column_titles_visible = true
+	_data.set_column_title(0, "Path")
+	_data.set_column_title(1, "Value")
+	_data.set_column_title(2, "From")
+	_data.set_column_expand(1, false)
+	_data.set_column_custom_minimum_width(1, 64)
+	tabs.add_child(_data)
 
 	_tweaks = Tree.new()
 	_tweaks.name = "Tweaks"
@@ -69,12 +107,17 @@ func _init(m: Session) -> void:
 
 func refresh() -> void:
 	_refresh_layers()
+	_refresh_data()
 	_refresh_session()
 	refresh_tweaks()
 
 
 func _refresh_layers() -> void:
-	for c in _layers.get_children():
+	_presets.clear()
+	_presets.add_item("Play with…")
+	for name: String in model.presets():
+		_presets.add_item(name)
+	for c in _layer_list.get_children():
 		c.queue_free()
 	for l: Dictionary in model.layers():
 		if l["name"] == "scratch":
@@ -87,7 +130,39 @@ func _refresh_layers() -> void:
 		box.text += "  (%d value%s)" % [effect.size(), "" if effect.size() == 1 else "s"]
 		var layer: String = l["name"]
 		box.toggled.connect(func(on): model.toggle(layer, on))
-		_layers.add_child(box)
+		_layer_list.add_child(box)
+
+
+## The data, grouped by path: a row a value, with the layer, file and line it comes from
+## (its whole chain in the tooltip), or the scene whose bound property has no value in the
+## data.
+func _refresh_data() -> void:
+	_data.clear()
+	var root := _data.create_item()
+	var groups := {}
+	for row: Dictionary in model.data_rows():
+		var parts := String(row["path"]).split(".")
+		var parent := root
+		var prefix := ""
+		for k in parts.size() - 1:
+			prefix = parts[k] if prefix.is_empty() else prefix + "." + parts[k]
+			if not groups.has(prefix):
+				var group := _data.create_item(parent)
+				group.set_text(0, parts[k])
+				group.set_selectable(0, false)
+				groups[prefix] = group
+			parent = groups[prefix]
+		var item := _data.create_item(parent)
+		item.set_text(0, parts[parts.size() - 1])
+		item.set_metadata(0, row["path"])
+		item.set_text(1, _show(row["value"]))
+		var s: Dictionary = row["source"]
+		if not s.is_empty():
+			item.set_text(2, "%s  %s:%d" % [s["layer"], String(s["file"]).get_file(), s["line"]])
+			item.set_tooltip_text(0, model.chain_text(row["path"], false))
+		else:
+			item.set_text(2, "scene " + String(row["scene"]).get_file())
+			item.set_tooltip_text(0, "%s: not in the data; %s's value stands" % [row["path"], row["scene"]])
 
 
 func _refresh_session() -> void:
