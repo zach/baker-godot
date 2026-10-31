@@ -177,7 +177,7 @@ rm "$work/sim/scenarios/typo.dta"
 printf '(player (jump (height 200)))\n' > "$work/data/agent.dta"
 sim over; compare before over over.json; status=$?
 [ "$status" -eq 1 ]; check $? "a jump of 200: compare exits 1"
-json over.json 'd["schema"] == "baker.compare/1" and d["broke"] == 1 and {o["name"]: o["moved"] for o in d["objectives"]} == {"cards.fireball_cost": "same", "cards.strike_upgrades": "same", "duel.tank_holds": "same", "economy.tank_by_turn_5": "same", "economy.army_by_turn_10": "same", "match.turn_seconds": "same", "jump.apex": "same", "reach.first_platform": "fixed", "reach.not_second_platform": "broke"}'
+json over.json 'd["schema"] == "baker.compare/1" and d["broke"] == 1 and {o["name"]: o["moved"] for o in d["objectives"]} == {"cards.fireball_cost": "same", "cards.strike_upgrades": "same", "duel.tank_holds": "same", "duel.tank_not_a_wall": "same", "economy.tank_by_turn_5": "same", "economy.tank_not_before_turn_4": "same", "economy.army_by_turn_10": "same", "match.turn_seconds": "same", "jump.apex": "same", "reach.first_platform": "fixed", "reach.not_second_platform": "broke"}'
 check $? "  it fixed the first platform and broke the second: not done"
 printf '; The agent: a higher jump, to clear the first platform.\n(player (jump (height 120)))\n' \
     > "$work/data/agent.dta"

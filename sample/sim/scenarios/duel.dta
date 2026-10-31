@@ -2,4 +2,4 @@
 ; ({skirmish.hits}, skirmish/rules.gd, through the damage rule in data/skirmish.dta).
 (scenario duel (desc "Armor keeps a tank in the fight against infantry")
    (steps 1)
-   (objectives duel.tank_holds))
+   (objectives duel.tank_holds duel.tank_not_a_wall))

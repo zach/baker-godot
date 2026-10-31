@@ -5,4 +5,4 @@
    (steps 12)
    (at step 0 {skirmish.start $seed})
    (until {skirmish.outcome})
-   (objectives economy.tank_by_turn_5 economy.army_by_turn_10))
+   (objectives economy.tank_by_turn_5 economy.tank_not_before_turn_4 economy.army_by_turn_10))

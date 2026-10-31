@@ -6,8 +6,9 @@ the result by the game, not by the agent.
     python3 eval/harness.py --godot PATH [--runs 3] [--jobs 3] [--model M] [--results CSV]
 
 A run succeeds if, afterwards: every file but data/agent.dta (and run output) is byte for
-byte as planted; `--baker check` exits 0; `--baker sim --baker-seeds 1-3` exits 0; and the task's
-own condition holds. Recorded per run: success and its parts, turns, tool calls, tokens,
+byte as planted; `--baker check` exits 0; `--baker sim --baker-seeds 1-3` exits 0, over the
+task's scenarios (the skirmish's: all but the platformer's `reach`); and the task's own
+condition holds. Recorded per run: success and its parts, turns, tool calls, tokens,
 cost, wall time.
 """
 import argparse
@@ -39,6 +40,31 @@ def plant_height(value):
     return plant
 
 
+def plant_skirmish(old, new):
+    def plant(sample: Path):
+        t = sample / "data/skirmish.dta"
+        text = t.read_text()
+        changed = text.replace(old, new, 1)
+        assert changed != text, old
+        t.write_text(changed)
+    return plant
+
+
+def plant_all(*plants):
+    def plant(sample: Path):
+        for p in plants:
+            p(sample)
+    return plant
+
+
+def evaluate(sample, godot, commands):
+    """Each command's value in the data as planted and changed: {config...} or a rule."""
+    out = Path(tempfile.mkdtemp()) / "eval.json"
+    run_godot(godot, sample, ["--baker", "eval", "--baker-json", *commands,
+                              "--baker-output", str(out)])
+    return [json.loads(line)["value"] for line in out.read_text().splitlines() if line.strip()]
+
+
 def fall_gravity(sample, godot):
     """The jump's gravity while falling, as the data now sets it: 2h/t^2 times the multiplier."""
     out = Path(tempfile.mkdtemp()) / "eval.json"
@@ -48,6 +74,14 @@ def fall_gravity(sample, godot):
     h, t, m = (json.loads(line)["value"] for line in out.read_text().splitlines() if line.strip())
     return 2 * h / (t * t) * m
 
+
+# The skirmish's tasks are judged on every scenario but the platformer's `reach`, which the
+# shipped data fails (the platformer tasks' baseline).
+SKIRMISH = ["cards", "duel", "economy", "jump", "match"]
+
+SLOW_HQ = plant_skirmish("(hq       (income 20)", "(hq       (income 12)")
+SOFT_TANK = plant_skirmish("(tank      (hp 10) (move 6) (attack 10) (armor 2)",
+                           "(tank      (hp 10) (move 6) (attack 10) (armor 0)")
 
 TASKS = {
     "reach-short": {
@@ -69,6 +103,41 @@ TASKS = {
                      "snappier?",
         # The fall's gravity went up from the planted data's.
         "condition": lambda sample, godot, planted: fall_gravity(sample, godot) > planted * 1.05,
+    },
+    # The skirmish: objectives that bound a value from both sides, so the obvious fix, made
+    # large, breaks its twin.
+    "slow-army": {
+        "plant": SLOW_HQ,
+        "complaint": "In the skirmish the economy crawls: the opening's tank shows up around "
+                     "turn 8 and the army is never ready in time. Speed it up, but it "
+                     "shouldn't turn into a tank rush either.",
+        "condition": None,
+        "scenarios": SKIRMISH,
+    },
+    "fragile-tank": {
+        "plant": SOFT_TANK,
+        "complaint": "Tanks melt: two infantry hits and a tank is gone. Make them tougher, "
+                     "but infantry should still be able to take one down.",
+        "condition": None,
+        "scenarios": SKIRMISH,
+    },
+    "rule-armor": {
+        "plant": None,
+        "complaint": "Heavy armor makes infantry useless. We want armor to stop only half "
+                     "its value in every match, the way the piercing experiment plays, not "
+                     "as an experiment. Duels should still feel the way they do now.",
+        # Armor 4 stops 2: the rule changed, in every match.
+        "condition": lambda sample, godot, planted: evaluate(
+            sample, godot, ["{skirmish.damage 6 4 0}"]) == [4],
+        "scenarios": SKIRMISH,
+    },
+    "two-complaints": {
+        "plant": plant_all(SLOW_HQ, SOFT_TANK),
+        "complaint": "Two things in the skirmish: the economy crawls (the tank comes around "
+                     "turn 8, the army is late), and tanks melt to two infantry hits. Fix "
+                     "both, without overshooting either way.",
+        "condition": None,
+        "scenarios": SKIRMISH,
     },
 }
 
@@ -145,7 +214,8 @@ def run_one(name, index, godot, model, root):
             result = event
     untouched = digest(sample) == planted
     checked = run_godot(godot, sample, ["--baker", "check"]) == 0
-    simulated = run_godot(godot, sample, ["--baker", "sim", "--baker-seeds", "1-3"]) == 0
+    only = [a for name in task.get("scenarios", []) for a in ("--baker-scenario", name)]
+    simulated = run_godot(godot, sample, ["--baker", "sim", "--baker-seeds", "1-3", *only]) == 0
     condition = True
     if task["condition"]:
         try:

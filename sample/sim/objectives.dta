@@ -19,6 +19,10 @@
    (measure {skirmish.hits infantry tank 0})
    (pass {>= $value 3}))
 
+(objective duel.tank_not_a_wall (desc "And at most 4: infantry can still take a tank down")
+   (measure {skirmish.hits infantry tank 0})
+   (pass {<= $value 4}))
+
 (objective cards.fireball_cost (desc "Fireball costs what the data says, not its file's 3")
    (measure {skirmish.card fireball cost})
    (pass {== $value 2}))
@@ -34,6 +38,10 @@
 (objective economy.tank_by_turn_5 (desc "The opening's tank is built by turn 5")
    (measure {skirmish.built_at tank})
    (pass {<= $value 5}))
+
+(objective economy.tank_not_before_turn_4 (desc "Nor before turn 4: a tank is not a rush")
+   (measure {skirmish.built_at tank})
+   (pass {>= $value 4}))
 
 (objective economy.army_by_turn_10 (desc "Blue's army is ready by turn 10")
    (measure {if {== $ended army_ready} $steps 99})
