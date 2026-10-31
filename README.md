@@ -295,6 +295,23 @@ var gravity = new Tweak<float>("world.gravity", 980f);   // current after every 
 int damage = Baker.CallFunction<int>("skirmish.damage", 6, 2, 0);
 ```
 
+**Values worker threads read.** A `Baker.Get` is a call into the engine, on the main
+thread, about 8 µs. For a threaded simulation, declare the paths it reads on a
+`PublishedValues` (main thread); after any change, the values are published at the next
+frame's start, where a reload lands, as one immutable `Snapshot` swapped by one reference.
+A worker takes `values.Current` once a tick and reads it: about 9 ns, no engine call, no
+allocation, and never part of a change. Tables come whole, as .NET dictionaries.
+
+```csharp
+var values = new PublishedValues();
+var price = values.Declare("units.tank.price", 50);
+var units = values.DeclareTable("units");
+// on a worker, once a tick:
+var now = values.Current;
+int p = now.Get(price);
+long hp = (long)now.Get(units)["tank"]["hp"];
+```
+
 ## Plan
 
 1. **Runtime** (done): the autoload, Godot's file access, layers from the project file,

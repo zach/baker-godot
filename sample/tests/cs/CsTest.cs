@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Threading;
 using System.Threading.Tasks;
 using BakerGodot;
 using Godot;
@@ -89,5 +91,72 @@ public partial class CsTest : Node
         Baker.ToggleLayer("floaty");
         Baker.Unlock();
         Check(Baker.Fingerprint() == print, "  Unlock: and back");
+
+        await Threads();
+    }
+
+    // Values worker threads read: published at the frame's start, whole.
+    async Task Threads()
+    {
+        Baker.PushLayerText("pair", "(pair (x 0) (y 0))");
+        using var values = new PublishedValues();
+        var x = values.Declare("pair.x", -1);
+        var y = values.Declare("pair.y", -1);
+        var units = values.DeclareTable("units");
+        var first = values.Current;
+        Check(first.Get(x) == 0 && first.Get(y) == 0, "PublishedValues: declared values, published");
+        Check((long)first.Get(units)["tank"]["price"] == 50,
+            "  a table, whole, as .NET values: the tank's price");
+
+        long reads = 0, torn = 0, lastSeen = 0;
+        var versions = new HashSet<long>();
+        using var stop = new CancellationTokenSource();
+        var workers = new List<Task>();
+        for (int w = 0; w < 4; w++)
+            workers.Add(Task.Run(() =>
+            {
+                long mine = 0, mineTorn = 0;
+                var seen = new HashSet<long>();
+                while (!stop.IsCancellationRequested)
+                {
+                    var now = values.Current;  // once a tick
+                    if (now.Get(x) != now.Get(y))
+                        mineTorn++;
+                    seen.Add(now.Version);
+                    mine++;
+                }
+                Interlocked.Add(ref reads, mine);
+                Interlocked.Add(ref torn, mineTorn);
+                lock (versions)
+                    versions.UnionWith(seen);
+            }));
+        // Each frame both values change: as a layer's text, then as two live edits.
+        for (int i = 1; i <= 40; i++)
+        {
+            if (i % 2 == 1)
+            {
+                Baker.ClearScratch();  // the last frame's live edits would stand over the layer
+                Baker.SetLayerText("pair", $"(pair (x {i}) (y {i}))");
+            }
+            else
+            {
+                Baker.Set("pair.x", i);
+                Baker.Set("pair.y", i);
+            }
+            await Frames(1);
+            if (values.Current.Get(x) == i)
+                lastSeen++;
+        }
+        stop.Cancel();
+        await Task.WhenAll(workers);
+        Check(torn == 0 && reads > 1000,
+            $"  four threads read {reads} times while both values changed each frame: never one without the other ({torn})");
+        Check(versions.Count >= 20, $"  and saw the publishes: {versions.Count} versions");
+        Check(lastSeen == 40, $"  each change published at the next frame's start: {lastSeen} of 40");
+        long before = values.Current.Version;
+        await Frames(3);
+        Check(values.Current.Version == before, "  a quiet frame publishes nothing");
+        Baker.ClearScratch();
+        Baker.RemoveLayer("pair");
     }
 }

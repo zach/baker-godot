@@ -33,6 +33,25 @@ skirmish ported to C#.
 | 4. The skirmish in C# | The match, the rules' callers, the catalog and the cards in C#, the economy stepped on worker threads; the same scenarios and objectives | `sim` over seeds 1-5 gives the GDScript skirmish's results; `compare` between the two shows nothing moved |
 | 5. Tooling and agents | CI with the .NET build; the export of a C# game; the agent skill and README for C# | `export.sh` on the C# sample; the evaluation's skirmish tasks rerun on the port |
 
+## Results
+
+**Step 3, published values** (`tests/cs_bench.tscn`, Linux x86_64, Godot 4.7.2 .NET, a
+debug build of the extension, 2026-10-31):
+
+| | |
+|---|---|
+| a read on a worker thread (`values.Current.Get(h)`, the snapshot taken each read) | 8.8 ns |
+| the same read through the autoload, on the main thread (`Baker.Get`) | 8,074 ns |
+| reads a second, four worker threads, the snapshot taken once a thousand reads | 639 million |
+| a publish of every value the sample's data holds (60) | 0.68 ms |
+| frames from a live edit to the threads | 1 (the next frame's start) |
+
+A publish reads each declared value through the autoload, so it costs what that many
+`Baker.Get` calls cost, once a frame and only after a change; a reader pays nothing for it.
+The C# test runs four threads reading two values the data keeps equal while both change
+each frame, as a layer's text and as two live edits: over millions of reads, none saw one
+without the other, and every change reached the threads at the next frame's start.
+
 ## With Baker
 
 Probably nothing new: the snapshot is built from what the runtime already reads. If a

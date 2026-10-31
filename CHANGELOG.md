@@ -17,6 +17,10 @@ On Baker 0.7.0 and Godot 4.7.
   (`BakerSample.csproj`) and runs in Godot's .NET build; `tests/cs_test.tscn` tests the
   package. CI runs every suite in the .NET build and packs the package; the Release
   workflow attaches `Baker.Godot.VERSION.nupkg` to the draft.
+- **Values worker threads read:** `PublishedValues`, declared paths and tables published at
+  the frame's start after a change as an immutable `Snapshot`, read on any thread with no
+  engine call (about 9 ns a read, against about 8 µs through the autoload). The C# test
+  shows four threads never see half of a change; `tests/cs_bench.tscn` measures the costs.
 
 ## 0.2.0 - 2026-10-31
 
