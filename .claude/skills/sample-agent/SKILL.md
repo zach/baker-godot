@@ -99,6 +99,9 @@ random number: the same data and scenario give the same result on every seed.
   edit them). Its tuning is `cards.NAME.cost`, `damage`, `upgrade` (another card's name) and
   `scaling` (a curve, `(scaling (1 1) (3 2))`): `reference --baker-json` lists each with its
   file's value. Retune a card in `agent.dta` by name, as any value.
+- **The skirmish's C# port** (`sample/skirmish/cs/`): the same data, scenarios and
+  objectives, the same results. `-- --skirmish cs --baker ...` runs it (Godot's .NET build);
+  use it only when asked to, and then in every command.
 - **Experiments:** `floaty` and `piercing` (in `data/experiments/`) are a person's A/B, off
   by default. Do not tune them unless asked; a scenario runs with them off.
 
