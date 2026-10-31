@@ -4,8 +4,10 @@ An integration of [Baker](https://github.com/zach/baker) with [Godot](https://go
 tuning data in layers (`default`, `local`, `agent`, experiments), each value knowing where
 it came from, and values tuned while playing written back to their line in the data.
 
-Version 0.1.0 (`CHANGELOG.md`), on Baker 0.4.0 and Godot 4.5.1, for Linux and Windows: the
-runtime, the editor loop, agents and exports, all four steps of the plan below.
+Version 0.2.0 (`CHANGELOG.md`), on Baker 0.7.0 and Godot 4.5.1, for Linux, Windows and
+macOS: the runtime, the editor loop, agents and exports (phase 1), and what a game shaped
+like a real one needs (phase 2): bindings at scale, tables, runtime layers and records,
+lockstep, rules in script, turn scenarios, the dock's data view, and a harder evaluation.
 
 ## The demonstration
 
@@ -274,8 +276,10 @@ against a local Baker checkout, add `-DFETCHCONTENT_SOURCE_DIR_BAKER=/path/to/ba
    the game's tool commands, `sim` and `compare` headless, the agent skill, and exports that
    load text. (An MCP bridge, plan A, was built and evaluated in baker-mcp; the command
    line and skill needed fewer calls for the same success, so this repository drops it.)
-4. **Requirements back to Baker** (done), as notes in `requirements/`: 0001 to 0011 shipped
-   in Baker and are in use here; 0012 to 0016 are with Baker.
+4. **Requirements back to Baker** (done), as notes in `requirements/`: 0001 to 0020 shipped
+   in Baker and are in use here; 0021 is built on Baker's main, for its next release.
+5. **Phase 2** (done, `dev/phase-2-plan.md`): the skirmish sample, steps 1 to 8.
+6. **Phase 3** (next): C#, a thin typed package and values a threaded simulation reads.
 
 ## Requirements for Baker
 

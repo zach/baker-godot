@@ -3,9 +3,11 @@
 Releases of Baker for Godot, newest first. Versions follow [semantic
 versioning](https://semver.org); before 1.0.0, a minor version may change the API.
 
-## Unreleased
+## 0.2.0 - 2026-10-31
 
-On Baker 0.7.0.
+Phase 2: what a game shaped like a real one needs, proven on a second sample, a turn-based
+skirmish with tables, rules, records, plugins and two peers. Built on Baker 0.7.0 and
+godot-cpp `godot-4.5-stable`, for Godot 4.5.1, on Linux, Windows and macOS (Apple silicon).
 
 - **Baker 0.7.0.** Metadata after a value is spelled with `@`, `(level_bonus 2 (@desc
   "..."))`, and a file declares its shapes with `#shape`: the sample's data is migrated with
