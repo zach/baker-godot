@@ -50,6 +50,10 @@ On Baker 0.7.0.
 - **`bind_resource(resource, bindings)`** binds a Resource's properties on the shared
   tweaks, a shader's parameters among them; a property that holds nothing yet binds as
   the type it declares.
+- **Turn scenarios.** The skirmish's match (`skirmish/match.gd`) plays a turn a step: the
+  `economy` scenario is written in turns, ends on the game's own outcome (`until`, named
+  `army_ready`), and judges outcomes over seeds; `agent.sh` shows a dearer tank breaking it
+  in `compare`.
 - **Builds, plugins and lobbies.** The build's feature tags as defines (Godot's own, and
   those `baker/feature_defines` lists), for `#ifdef` and a project layer's `(when ...)`;
   `set_defines`, `get_defines`. `push_layer_dir` and a project's `(dir ...)` layers over

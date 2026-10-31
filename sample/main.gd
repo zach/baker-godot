@@ -26,6 +26,7 @@ func _ready() -> void:
 	Baker.bind_function("skirmish.hits", SkirmishRules.hits_to_kill)
 	# The skirmish's cards are resources, one a file; the data holds what a layer changes.
 	Baker.bind_records("cards", "res://skirmish/cards")
+	add_child(preload("res://skirmish/match.gd").new())
 	Baker.bind_function("skirmish.card", _card_field)
 	if Baker.is_simulating():
 		Baker.sim_ready.call_deferred()

@@ -24,6 +24,12 @@
    {do (($hit {- {+ $attack {* $level {config.get rules.level_bonus}}} $armor}))
       {if {< $hit 1} 1 $hit}}}
 
+; The economy: what each side starts with and earns, and when its army is ready.
+(economy
+   (start_points 10 (@desc "Points each side starts a match with"))
+   (buildings hq (@desc "What each side owns at the start; each earns its income a turn"))
+   (army_ready 5 (@desc "Units that make blue's army ready")))
+
 ; A match: a server build sets its own (data/server.dta).
 (match
    (turn_seconds 0 (@desc "A turn's time limit, in seconds; 0: none")))

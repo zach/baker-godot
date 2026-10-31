@@ -142,7 +142,7 @@ sim before; status=$?
 [ "$status" -eq 1 ]; check $? "the baseline: reach fails on the shipped data (sim exits 1)"
 json before/results.json 'd["schema"] == "baker.sim/1.3" and d["status"] == "failed"'
 check $? "  as baker.sim/1.3 results"
-json before/results.json '[(r["scenario"], r["seed"]) for r in d["runs"]] == [(n, s) for n in ("cards", "duel", "jump", "match", "reach") for s in (1, 2, 3)]'
+json before/results.json '[(r["scenario"], r["seed"]) for r in d["runs"]] == [(n, s) for n in ("cards", "duel", "economy", "jump", "match", "reach") for s in (1, 2, 3)]'
 check $? "  every scenario, each seed a run of its own"
 json before/results.json '[o["value"] for r in d["runs"] if r["scenario"] in ("jump", "reach") for o in r["objectives"]] == [96.06] * 9'
 check $? "  the same apex in every run: 96.06"
@@ -166,7 +166,7 @@ rm "$work/sim/scenarios/typo.dta"
 printf '(player (jump (height 200)))\n' > "$work/data/agent.dta"
 sim over; compare before over over.json; status=$?
 [ "$status" -eq 1 ]; check $? "a jump of 200: compare exits 1"
-json over.json 'd["schema"] == "baker.compare/1" and d["broke"] == 1 and {o["name"]: o["moved"] for o in d["objectives"]} == {"cards.fireball_cost": "same", "cards.strike_upgrades": "same", "duel.tank_holds": "same", "match.turn_seconds": "same", "jump.apex": "same", "reach.first_platform": "fixed", "reach.not_second_platform": "broke"}'
+json over.json 'd["schema"] == "baker.compare/1" and d["broke"] == 1 and {o["name"]: o["moved"] for o in d["objectives"]} == {"cards.fireball_cost": "same", "cards.strike_upgrades": "same", "duel.tank_holds": "same", "economy.tank_by_turn_5": "same", "economy.army_by_turn_10": "same", "match.turn_seconds": "same", "jump.apex": "same", "reach.first_platform": "fixed", "reach.not_second_platform": "broke"}'
 check $? "  it fixed the first platform and broke the second: not done"
 printf '; The agent: a higher jump, to clear the first platform.\n(player (jump (height 120)))\n' \
     > "$work/data/agent.dta"
@@ -184,6 +184,14 @@ sim rule; [ $? -eq 1 ]; check $? "  sim sees the rule: the duel fails (exits 1)"
 compare before rule rule.json
 json rule.json '{o["name"]: o["moved"] for o in d["objectives"]}["duel.tank_holds"] == "broke"'
 check $? "  compare names the objective the rule broke"
+# A balance change, judged in turns: a dearer tank comes a turn late.
+printf '(units (tank (price 61)))\n' > "$work/data/agent.dta"
+sim turns; [ $? -eq 1 ]; check $? "a dearer tank: the economy scenario fails (exits 1)"
+compare before turns turns.json
+json turns.json '{o["name"]: o["moved"] for o in d["objectives"]}["economy.tank_by_turn_5"] == "broke"'
+check $? "  compare names the objective, judged in turns"
+json turns/results.json '[r["ended"] for r in d["runs"] if r["scenario"] == "economy"] == ["army_ready"] * 3'
+check $? "  each run ended when the army was ready, not at its length"
 cp "$work/jump.dta" "$work/data/agent.dta"
 
 # 4.

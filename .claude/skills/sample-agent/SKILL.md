@@ -80,7 +80,10 @@ random number: the same data and scenario give the same result on every seed.
 - **Scenarios:** `jump` (one held jump peaks at `player.jump.height`, within 2 px),
   `reach` (a jump from the floor clears the first platform, 100 px up, with 10 px to spare,
   and stays 20 px below the second, 180 px up: the climb takes two jumps), `duel`
-  (infantry takes at least 3 hits to destroy a tank), and `cards` (the cards read the data).
+  (infantry takes at least 3 hits to destroy a tank), `cards` (the cards read the data),
+  and `economy` (a match in turns: the opening's tank by turn 5, an army of
+  `economy.army_ready` units by turn 10; tune `economy.*`, `units.*.price` and
+  `buildings.*.income`).
 - **Rules:** the skirmish's damage is a script function in `data/skirmish.dta`, defined in
   its `#autorun`. To change a rule rather than a number, define it again in `agent.dta`'s
   own `#autorun`, whole, with its `(@doc ...)`; `sim` judges it as it judges a value.

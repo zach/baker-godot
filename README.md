@@ -179,6 +179,12 @@ carry over.
   data's does not clear it. With `--fixed-fps 60`, Godot runs frames as fast as it can,
   each 1/60 s of game time: the same results, about 20 times sooner than at the clock's
   pace.
+- **Turns.** A turn-based game counts its own steps: the skirmish's match
+  (`sample/skirmish/match.gd`) plays a turn each physics tick once a scenario starts it, so
+  `economy` is written in turns, `(steps 12)`, `(at step 0 {skirmish.start $seed})`, and
+  ends when blue's army is ready, `(until {skirmish.outcome})`, which names how it ended
+  (`$ended`, `army_ready`). Its objectives judge outcomes ("the opening's tank by turn 5"),
+  and a dearer tank in a layer breaks one, which `compare` names.
 - **The agent layer.** An agent proposes in `data/agent.dta`, which version control
   ignores. `promote` writes nothing but a patch: a person applies it (`git apply -p1`) or
   keeps the values from the editor.

@@ -1,0 +1,8 @@
+; The skirmish's economy, a turn a step (skirmish/match.gd): both sides earn and buy until
+; blue's army is ready, or twelve turns. After the opening each side buys by its seed, so
+; seeds give different runs.
+(scenario economy (desc "The HQ buys the opening's tank by turn 5, and an army by turn 10")
+   (steps 12)
+   (at step 0 {skirmish.start $seed})
+   (until {skirmish.outcome})
+   (objectives economy.tank_by_turn_5 economy.army_by_turn_10))

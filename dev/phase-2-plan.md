@@ -70,7 +70,9 @@ content; emitting shapes from a GDScript class, until hand-written shapes prove 
   node's step.
 - **Step 6 uses Baker 0.6.0's steps:** a turn is one step of the game's own,
   `(steps N)` and `(at step N ...)`, and `(until {command})` ends a run on the board's state
-  (note 0018).
+  (note 0018). The match plays a turn a physics tick, so no `--baker-step-hz` is needed and
+  the platformer's scenarios, in seconds, run beside it; the project names no `step_name`,
+  since one name would mislabel the other's steps.
 
 ## After phase 2
 

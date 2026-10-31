@@ -30,3 +30,11 @@
 (objective match.turn_seconds (desc "A turn's time limit: 30 on a server build, else none")
    (measure {config.get match.turn_seconds})
    (pass {or {== $value 0} {== $value 30}}))
+
+(objective economy.tank_by_turn_5 (desc "The opening's tank is built by turn 5")
+   (measure {skirmish.built_at tank})
+   (pass {<= $value 5}))
+
+(objective economy.army_by_turn_10 (desc "Blue's army is ready by turn 10")
+   (measure {if {== $ended army_ready} $steps 99})
+   (pass {<= $value 10}))
