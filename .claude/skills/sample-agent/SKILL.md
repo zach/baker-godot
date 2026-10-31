@@ -5,7 +5,7 @@ description: Work on the Godot sample's tuning data as its agent - tune the plat
 
 # Working on the sample's data
 
-The sample (`sample/`) is a Godot 4.5 platformer whose tuning is Baker data. Its game is
+The sample (`sample/`) is a Godot 4.7 platformer whose tuning is Baker data. Its game is
 also its own tool: run headless, it checks, explains, simulates and compares. You work where
 a technical designer works: in data, never in the game's scripts or scenes.
 
@@ -26,7 +26,7 @@ sample/player.gd, *.tscn          the game. Not yours: its bound properties read
 ## The commands
 
 Build the extension once (README, "Building"). Then, from the repository's root, with
-`G="godot --headless --fixed-fps 60 --path sample --"` (Godot 4.5; `--fixed-fps 60` runs the
+`G="godot --headless --fixed-fps 60 --path sample --"` (Godot 4.7; `--fixed-fps 60` runs the
 game's frames as fast as it can, each 1/60 s of game time, so `sim` gives the same results
 in a fraction of the time). Godot runs the game in `sample/`, so a
 relative path you give (`--baker-results runs/before`, `compare`'s directories, `--baker-output`, `--baker-patch`)
@@ -99,6 +99,9 @@ random number: the same data and scenario give the same result on every seed.
   edit them). Its tuning is `cards.NAME.cost`, `damage`, `upgrade` (another card's name) and
   `scaling` (a curve, `(scaling (1 1) (3 2))`): `reference --baker-json` lists each with its
   file's value. Retune a card in `agent.dta` by name, as any value.
+- **The skirmish's C# port** (`sample/skirmish/cs/`): the same data, scenarios and
+  objectives, the same results. `-- --skirmish cs --baker ...` runs it (Godot's .NET build);
+  use it only when asked to, and then in every command.
 - **Experiments:** `floaty` and `piercing` (in `data/experiments/`) are a person's A/B, off
   by default. Do not tune them unless asked; a scenario runs with them off.
 

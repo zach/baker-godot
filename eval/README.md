@@ -106,6 +106,20 @@ consequences of a change are not visible to the scenarios at all (feel, readabil
 data at the scale of a shipped game, where an agent's reading of the files, not the
 commands, would be the cost.
 
+## Phase 3: the skirmish's C# port
+
+Run on 2026-10-31 at 0258945 (Baker 0.7.0, Godot 4.7.2's .NET build, Linux), same model
+and client, the skirmish's six tasks judged with the C# port (`harness.py --skirmish cs`:
+`--skirmish cs` first after `--` in every command, the agent told so). Results in
+`results-phase3-cs.csv`.
+
+**Result: 18 of 18 runs succeeded,** for $2.54, 3.3 to 7.3 tool calls a task, as on the
+GDScript skirmish. Every transcript shows the agent putting `--skirmish cs` in each command,
+and the fixes are the ones the GDScript round chose (HQ income 22 to 24, tank armor 2 or
+more hit points, the rule redefined whole, the eight weak cards by name, a refusal that
+names `economy.tank_not_before_turn_4`). The port changes nothing the agent sees: the same
+commands, the same results, so the skill carries over to a C# game unchanged.
+
 ## Protocol
 
 - **Tasks** (`harness.py`): each a person's complaint over a fresh copy of the repository,

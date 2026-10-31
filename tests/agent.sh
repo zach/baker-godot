@@ -21,7 +21,8 @@ here="$(cd "$(dirname "$0")/.." && pwd)"
 work="$(mktemp -d)"
 trap 'kill "$game" 2>/dev/null; rm -rf "$work"' EXIT
 game=""
-cp -r "$here/sample/." "$work/"
+. "$here/tests/copy_sample.sh"
+copy_sample "$work"
 rm -rf "$work/.godot" "$work/data/agent.dta"
 # A probe, for the game's functions: one reads the data through Baker.get_value, as game
 # code does; one takes an optional argument. And two enum properties, bound to the data.

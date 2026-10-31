@@ -1,13 +1,14 @@
 # Baker for Godot
 
-An integration of [Baker](https://github.com/zach/baker) with [Godot](https://godotengine.org) 4.5:
+An integration of [Baker](https://github.com/zach/baker) with [Godot](https://godotengine.org) 4.7:
 tuning data in layers (`default`, `local`, `agent`, experiments), each value knowing where
 it came from, and values tuned while playing written back to their line in the data.
 
-Version 0.2.0 (`CHANGELOG.md`), on Baker 0.7.0 and Godot 4.5.1, for Linux, Windows and
-macOS: the runtime, the editor loop, agents and exports (phase 1), and what a game shaped
-like a real one needs (phase 2): bindings at scale, tables, runtime layers and records,
-lockstep, rules in script, turn scenarios, the dock's data view, and a harder evaluation.
+Version 0.3.0 (`CHANGELOG.md`), on Baker 0.7.0 and Godot 4.7.2, for Linux and Windows: the
+runtime, the editor loop, agents and exports (phase 1); what a game shaped like a real one
+needs (phase 2): bindings at scale, tables, runtime layers and records, lockstep, rules in
+script, turn scenarios, the dock's data view, and a harder evaluation; and C# (phase 3):
+the `Baker.Godot` NuGet package, values worker threads read, and the skirmish in C#.
 
 ## The demonstration
 
@@ -246,6 +247,7 @@ godot --headless --path sample res://tests/runtime_test.tscn
 tests/e2e.sh path/to/godot                              # the demonstration, headless
 tests/agent.sh path/to/godot                            # an agent's loop
 tests/lockstep.sh path/to/godot                         # two peers agree on the data
+tests/port.sh path/to/godot-mono                        # the C# skirmish gives the GDScript's results
 tests/export.sh path/to/godot                           # a release export, run
 ```
 
@@ -261,7 +263,7 @@ the draft creates its tag.
 
 ## Building
 
-CMake fetches godot-cpp (4.5) and Baker 0.7.0 (its core, its host kit and its tools), and puts the library in
+CMake fetches godot-cpp (10.0.0, for Godot 4.7) and Baker 0.7.0 (its core, its host kit and its tools), and puts the library in
 `sample/addons/baker/bin/`:
 
 ```sh
@@ -271,6 +273,53 @@ cmake -B build-release -DGODOTCPP_TARGET=template_release && cmake --build build
 
 A release build is a Baker shipping build: no reloads, live edits or write-back. To build
 against a local Baker checkout, add `-DFETCHCONTENT_SOURCE_DIR_BAKER=/path/to/baker`.
+
+The sample is a C# project as well as a GDScript one, so it runs in Godot's .NET build
+(4.7.2), with the .NET 8 SDK. Build its C# before opening it headless, and export it with
+the .NET export templates (`tools/fetch_template.py --mono`):
+
+```sh
+dotnet build sample/BakerSample.csproj        # the sample's C#, and the package from source
+dotnet pack csharp/Baker.Godot -c Release     # the NuGet package Baker.Godot
+godot --headless --path sample res://tests/cs_test.tscn   # the C# tests
+```
+
+## C#
+
+`csharp/Baker.Godot` is the C# API, published as the NuGet package `Baker.Godot`: typed
+calls over the `Baker` autoload, which the addon provides (a game installs both). See
+`csharp/Baker.Godot/README.md`.
+
+```csharp
+using BakerGodot;
+float height = Baker.Get("player.jump.height", 96f);
+var gravity = new Tweak<float>("world.gravity", 980f);   // current after every change
+int damage = Baker.CallFunction<int>("skirmish.damage", 6, 2, 0);
+```
+
+**The skirmish in C#.** `sample/skirmish/cs/` is the skirmish's economy, catalog and rules
+ported to C#, selected with `-- --skirmish cs`: the same data, scenarios and objectives,
+and the two sides' turns run on worker threads in parallel, each reading a
+`PublishedValues` snapshot taken once a turn, so a live edit or a layer reaches both sides
+whole at the next turn. `tests/port.sh` runs `sim` over seeds 1-5 with each and shows every
+run the same, outcome by outcome, and `compare` moving nothing.
+
+**Values worker threads read.** A `Baker.Get` is a call into the engine, on the main
+thread, about 8 µs. For a threaded simulation, declare the paths it reads on a
+`PublishedValues` (main thread); after any change, the values are published at the next
+frame's start, where a reload lands, as one immutable `Snapshot` swapped by one reference.
+A worker takes `values.Current` once a tick and reads it: about 9 ns, no engine call, no
+allocation, and never part of a change. Tables come whole, as .NET dictionaries.
+
+```csharp
+var values = new PublishedValues();
+var price = values.Declare("units.tank.price", 50);
+var units = values.DeclareTable("units");
+// on a worker, once a tick:
+var now = values.Current;
+int p = now.Get(price);
+long hp = (long)now.Get(units)["tank"]["hp"];
+```
 
 ## Plan
 
@@ -286,7 +335,8 @@ against a local Baker checkout, add `-DFETCHCONTENT_SOURCE_DIR_BAKER=/path/to/ba
 4. **Requirements back to Baker** (done), as notes in `requirements/`: 0001 to 0020 shipped
    in Baker and are in use here; 0021 is built on Baker's main, for its next release.
 5. **Phase 2** (done, `dev/phase-2-plan.md`): the skirmish sample, steps 1 to 8.
-6. **Phase 3** (next): C#, a thin typed package and values a threaded simulation reads.
+6. **Phase 3** (done, `dev/phase-3-plan.md`): Godot 4.7, the C# package on NuGet, values a
+   threaded simulation reads, and the skirmish ported to C#, giving the GDScript's results.
 
 ## Requirements for Baker
 

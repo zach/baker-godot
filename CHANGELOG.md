@@ -3,6 +3,33 @@
 Releases of Baker for Godot, newest first. Versions follow [semantic
 versioning](https://semver.org); before 1.0.0, a minor version may change the API.
 
+## 0.3.0 - 2026-10-31
+
+Phase 3: C#, on Godot 4.7. Built on Baker 0.7.0 and godot-cpp 10.0.0 (API 4.7), for Godot
+4.7.2, on Linux and Windows; the C# API is the NuGet package `Baker.Godot`, attached to the
+release beside the addon. macOS stays paused in CI.
+
+- **Godot 4.7.** The integration builds with godot-cpp 10.0.0 at API 4.7 and runs on Godot
+  4.7.2; the extension's `compatibility_minimum` is 4.7. CI, the export template and the
+  docs follow. Phase 3's plan is `dev/phase-3-plan.md`.
+- **The C# API, `Baker.Godot`,** a NuGet package: typed reads (`Get<T>`, `GetTable`,
+  `GetList`), live edits, layers (pushed, toggled, as text, from a directory), rules
+  (`CallFunction<T>`, `Eval`, `BindFunction`), records, lockstep, the `Changed` event, and
+  `Tweak<T>`, a value current after every change. The sample is a C# project too
+  (`BakerSample.csproj`) and runs in Godot's .NET build; `tests/cs_test.tscn` tests the
+  package. CI runs every suite in the .NET build and packs the package; the Release
+  workflow attaches `Baker.Godot.VERSION.nupkg` to the draft.
+- **Values worker threads read:** `PublishedValues`, declared paths and tables published at
+  the frame's start after a change as an immutable `Snapshot`, read on any thread with no
+  engine call (about 9 ns a read, against about 8 µs through the autoload). The C# test
+  shows four threads never see half of a change; `tests/cs_bench.tscn` measures the costs.
+- **The skirmish in C#** (`sample/skirmish/cs/`, `-- --skirmish cs`): the match, with each
+  side's turn on a worker thread reading a published snapshot, the catalog, the rules and
+  the cards' field; `tests/port.sh` shows `sim` over seeds 1-5 giving the GDScript
+  skirmish's results run by run, and `compare` moving nothing. The evaluation's skirmish
+  tasks rerun on the port (`eval/harness.py --skirmish cs`) succeed 18 of 18, with the
+  same fixes as on the GDScript skirmish.
+
 ## 0.2.0 - 2026-10-31
 
 Phase 2: what a game shaped like a real one needs, proven on a second sample, a turn-based

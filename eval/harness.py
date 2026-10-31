@@ -4,6 +4,7 @@ of the sample, gives a headless Claude Code the skill and a person's complaint, 
 the result by the game, not by the agent.
 
     python3 eval/harness.py --godot PATH [--runs 3] [--jobs 3] [--model M] [--results CSV]
+                            [--skirmish cs]   # the C# port, with Godot's .NET build as PATH
 
 A run succeeds if, afterwards: every file but data/agent.dta (and run output) is byte for
 byte as planted; `--baker check` exits 0; `--baker sim` exits 0 over the task's seeds (1-3;
@@ -190,15 +191,21 @@ TASKS = {
 
 PROMPT = """You are working in a copy of the baker-godot repository (your working directory).
 Its sample game is in sample/. Use the `godot` command on PATH. Work only inside this
-directory. A person writes:
+directory.{port} A person writes:
 
 "{complaint}"
 """
 
+# The skirmish's C# port (--skirmish cs): the game's own arguments, which the judge puts
+# first after `--` in every command, and the agent is told to.
+GAME_ARGS = []
+PORT_NOTE = (" The skirmish's C# port is in use: put `--skirmish cs` first after `--` in every"
+             " godot command, so G=\"godot --headless --fixed-fps 60 --path sample -- --skirmish cs\".")
+
 
 def run_godot(godot, sample, args, timeout=180):
     return subprocess.run([str(godot), "--headless", "--fixed-fps", "60", "--path", str(sample),
-                           "--", *args],
+                           "--", *GAME_ARGS, *args],
                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
                           timeout=timeout).returncode
 
@@ -222,6 +229,9 @@ def prepare(work: Path, godot: Path, task):
     (sample / "data/agent.dta").unlink(missing_ok=True)
     if task["plant"]:
         task["plant"](sample)
+    if (sample / "BakerSample.csproj").exists():  # the copy's C#, for Godot's .NET build
+        subprocess.run(["dotnet", "build", str(sample / "BakerSample.csproj")],
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=600)
     for _ in range(2):  # a fresh headless import can crash on exit; the second is clean
         subprocess.run([str(godot), "--headless", "--path", str(sample), "--import"],
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=300)
@@ -241,7 +251,8 @@ def run_one(name, index, godot, model, root):
     env = dict(os.environ, PATH=f"{bin_dir}{os.pathsep}{os.environ['PATH']}")
     start = time.time()
     proc = subprocess.run(
-        ["claude", "-p", PROMPT.format(complaint=task["complaint"]), "--model", model,
+        ["claude", "-p", PROMPT.format(complaint=task["complaint"],
+                                       port=PORT_NOTE if GAME_ARGS else ""), "--model", model,
          "--append-system-prompt", SKILL.read_text(), "--allowedTools", TOOLS,
          "--max-turns", "60", "--output-format", "stream-json", "--verbose"],
         cwd=repo, env=env, stdin=subprocess.DEVNULL, capture_output=True, text=True,
@@ -298,7 +309,11 @@ def main():
     ap.add_argument("--tasks", default=",".join(TASKS))
     ap.add_argument("--results", type=Path, default=HERE / "eval/results.csv")
     ap.add_argument("--work", type=Path, default=Path(tempfile.mkdtemp(prefix="baker-eval-")))
+    ap.add_argument("--skirmish", choices=["gd", "cs"], default="gd",
+                    help="the GDScript skirmish, or its C# port (Godot's .NET build)")
     args = ap.parse_args()
+    if args.skirmish == "cs":
+        GAME_ARGS[:] = ["--skirmish", "cs"]
     godot = args.godot.resolve()
     jobs = [(t, i) for t in args.tasks.split(",") for i in range(1, args.runs + 1)]
     rows = []

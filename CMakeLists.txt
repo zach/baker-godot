@@ -18,11 +18,13 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 include(FetchContent)
 
-# godot-cpp, for one Godot version line (4.5). Its headers are not ours to warn about.
+# godot-cpp, for one Godot version line (4.7): its 10.0.0 targets 4.3 to 4.7 by an API
+# version. Its headers are not ours to warn about.
 set(GODOTCPP_SYSTEM_HEADERS ON CACHE BOOL "" FORCE)
+set(GODOTCPP_API_VERSION "4.7" CACHE STRING "" FORCE)
 FetchContent_Declare(godot-cpp
   GIT_REPOSITORY https://github.com/godotengine/godot-cpp.git
-  GIT_TAG        e83fd0904c13356ed1d4c3d09f8bb9132bdc6b77)  # godot-4.5-stable
+  GIT_TAG        10.0.0-stable)
 FetchContent_MakeAvailable(godot-cpp)
 
 # Baker, through its public headers only, at a released version.
