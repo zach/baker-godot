@@ -1,0 +1,5 @@
+; A dedicated server's own values: the layer is in the stack only in a build whose feature
+; tags define `server` (baker-project.dta's (when server); project setting
+; baker/feature_defines lists the tags that are defines).
+(match
+   (turn_seconds 30))

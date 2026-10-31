@@ -29,12 +29,30 @@ jobs:
             zip: Godot_v4.5.1-stable_win64.exe.zip
             template: windows_release_x86_64.exe
             preset: Windows
+          # macOS on Apple silicon: every suite but two. The export would need the macOS
+          # template and a signing setup of its own. The demonstration's headless editor
+          # cannot start the game on the runner (EditorRun::run fails, editor_run.cpp:178),
+          # though the game started directly runs every other suite there.
+          # Paused on 2026-10-31: since then every macOS job was cancelled before a runner
+          # took it. Last green at e318f84 (phase 2, step 7). To restore, uncomment the entry.
+          # - os: macos-14
+          #   godot: Godot.app/Contents/MacOS/Godot
+          #   zip: Godot_v4.5.1-stable_macos.universal.zip
+          #   template: ""
+          #   preset: ""
+          #   no_editor_play: true
     runs-on: ${{ matrix.os }}
     defaults:
       run:
         shell: bash
     steps:
       - uses: actions/checkout@v4
+      - name: GNU coreutils and sed (macOS), which the test scripts use
+        if: runner.os == 'macOS'
+        run: |
+          brew install coreutils gnu-sed
+          echo "$(brew --prefix)/opt/coreutils/libexec/gnubin" >> "$GITHUB_PATH"
+          echo "$(brew --prefix)/opt/gnu-sed/libexec/gnubin" >> "$GITHUB_PATH"
       - name: Build the extension (debug and shipping)
         run: |
           cmake -B build -DCMAKE_BUILD_TYPE=Debug -DGODOTCPP_TARGET=template_debug -DBAKER_GODOT_WERROR=ON
@@ -44,27 +62,39 @@ jobs:
       - name: Fetch Godot
         run: |
           curl -sSL -o godot.zip https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}-stable/${{ matrix.zip }}
-          7z x -ogodot godot.zip >/dev/null
-          chmod +x godot/* || true
+          if [ "$RUNNER_OS" = macOS ]; then unzip -q godot.zip -d godot; else 7z x -ogodot godot.zip >/dev/null; fi
+          chmod +x godot/* "godot/${{ matrix.godot }}" 2>/dev/null || true
       - name: Import the sample
+        id: import
         # A fresh headless import of a project with a GDExtension can crash on exit in
         # Godot 4.5.1, with godot-cpp's own example too; the second import is clean.
         run: |
           godot/${{ matrix.godot }} --headless --path sample --import || true
           godot/${{ matrix.godot }} --headless --path sample --import
+      # Each suite runs once the sample imports, whatever the one before it did, so a run
+      # reports every failure; the job fails if any does.
       - name: Runtime tests
+        if: ${{ !cancelled() && steps.import.outcome == 'success' }}
         timeout-minutes: 2
         run: godot/${{ matrix.godot }} --headless --path sample res://tests/runtime_test.tscn
       - name: Scenario jump
+        if: ${{ !cancelled() && steps.import.outcome == 'success' }}
         timeout-minutes: 2
-        run: godot/${{ matrix.godot }} --headless --fixed-fps 60 --path sample -- --baker sim --scenario jump
+        run: godot/${{ matrix.godot }} --headless --fixed-fps 60 --path sample -- --baker sim --baker-scenario jump
       - name: The demonstration, in a headless editor
+        if: ${{ !cancelled() && steps.import.outcome == 'success' && !matrix.no_editor_play }}
         timeout-minutes: 5
         run: tests/e2e.sh "$PWD/godot/${{ matrix.godot }}"
       - name: An agent's loop, through the tool commands and the console
+        if: ${{ !cancelled() && steps.import.outcome == 'success' }}
         timeout-minutes: 5
         run: tests/agent.sh "$PWD/godot/${{ matrix.godot }}"
+      - name: Two peers of a lockstep match
+        if: ${{ !cancelled() && steps.import.outcome == 'success' }}
+        timeout-minutes: 5
+        run: tests/lockstep.sh "$PWD/godot/${{ matrix.godot }}"
       - name: A release export, run
+        if: ${{ !cancelled() && steps.import.outcome == 'success' && matrix.preset != '' }}
         timeout-minutes: 10
         run: |
           "$(command -v python3 || command -v python)" tools/fetch_template.py "$GODOT_VERSION" ${{ matrix.template }}

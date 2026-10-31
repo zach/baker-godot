@@ -1,0 +1,65 @@
+; The skirmish's tables (sample/skirmish/): what each unit and building is. A keyed table
+; merges by name, so a layer above retunes one record, or one field of it, and a content
+; pack adds records. Flags are 0 or 1. After a value, (@range ...) and (@desc ...) are its
+; metadata, and #shape declares what a record holds.
+
+(units
+   (infantry  (hp 10) (move 4) (attack 6)  (armor 0) (price 25) (upkeep 1) (captures 1))
+   (tank      (hp 10) (move 6) (attack 10) (armor 2) (price 50) (upkeep 3))
+   (artillery (hp 8)  (move 3) (attack 12) (armor 1) (price 60) (upkeep 2) (reach 2 3))
+   (heli      (hp 10) (move 7) (attack 8)  (armor 1) (price 70) (upkeep 3) (flies 1)))
+
+(buildings
+   (hq       (income 20) (capture 1000))
+   (barracks (income 5)  (capture 70) (cost 40))
+   (tower    (income 15) (capture 50) (cost 90)))
+
+; The rules, in Baker's script: each layer's #autorun commands run bottom to top, so a layer
+; above changes a rule by defining it again, as an experiment or an agent's layer does. The
+; game calls them with Baker.call_function (skirmish/rules.gd).
+(rules
+   (level_bonus 2 (@desc "Attack a level adds")))
+#autorun {func skirmish.damage ($attack $armor $level)
+   (@doc "One hit: the attacker's attack and its level's bonus, less the defender's armor; at least 1.")
+   {do (($hit {- {+ $attack {* $level {config.get rules.level_bonus}}} $armor}))
+      {if {< $hit 1} 1 $hit}}}
+
+; The economy: what each side starts with and earns, and when its army is ready.
+(economy
+   (start_points 10 (@desc "Points each side starts a match with"))
+   (buildings hq (@desc "What each side owns at the start; each earns its income a turn"))
+   (army_ready 5 (@desc "Units that make blue's army ready")))
+
+; A match: a server build sets its own (data/server.dta).
+(match
+   (turn_seconds 0 (@desc "A turn's time limit, in seconds; 0: none")))
+
+; The cards are resources, one a file (skirmish/cards/*.tres): each file holds a card's own
+; values, and the data only what it changes, by the card's name. A reference to another card
+; is its name; the scaling curve is points (level multiplier).
+(cards
+   (fireball (cost 2)))
+
+; The AI's opening: what it builds first, in order.
+(ai
+   (opening (build infantry) (build infantry) (build tank))
+   ; After the opening, each turn: one of what it can afford, or nothing (save), drawn by
+   ; its seed with these weights.
+   (weights (infantry 4) (tank 2) (artillery 1) (heli 1) (barracks 1) (tower 1) (save 3)))
+
+; What a record must hold: check reports a field of the wrong type or out of range, or a
+; required one missing, as an error, and a field no shape declares as a warning.
+#shape (unit (@at units) (@keyed)
+   (hp       int (@range 1 50) (@desc "Hit points"))
+   (move     int (@range 1 10) (@desc "Tiles a turn"))
+   (attack   int (@range 0 30))
+   (armor    int (@range 0 10) (@desc "Taken off each hit"))
+   (price    int (@range 0 500) (@desc "Action points to build one"))
+   (upkeep   int (@range 0 20) (@optional) (@desc "Points a turn while it lives"))
+   (captures int (@range 0 1) (@optional))
+   (flies    int (@range 0 1) (@optional))
+   (reach    (list int) (@optional) (@desc "Nearest and farthest tiles it attacks")))
+#shape (building (@at buildings) (@keyed)
+   (income   int (@range 0 100) (@desc "Action points a turn"))
+   (capture  int (@range 1 2000) (@desc "Points to take it"))
+   (cost     int (@range 0 1000) (@optional) (@desc "Points to build one; none: not built")))

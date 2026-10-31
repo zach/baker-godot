@@ -13,3 +13,6 @@
       (coyote 0.1)           ; a jump still counts this long after leaving a ledge
       (buffer 0.12))         ; a jump pressed this long before landing counts
    (max_fall 900))
+
+; The skirmish (sample/skirmish/) keeps its tables beside the platformer's tuning.
+#include "skirmish.dta"

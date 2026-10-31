@@ -1,0 +1,6 @@
+; The cannon minigame's own tuning, a plugin's pack: a layer of its own (the plugins
+; directory in baker-project.dta), read under the plugin's name. Its scene binds
+; minigames.{plugin}.gravity, so a layer above retunes this plugin's gravity alone.
+(minigames
+   (cannon
+      (gravity 700 (@range 100 2000) (@desc "The cannonball's fall, px/s²"))))

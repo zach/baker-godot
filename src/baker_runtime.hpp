@@ -3,11 +3,13 @@
 // BakerRuntime: the game's Baker, as the autoload `Baker` (addons/baker/baker.gd extends
 // it). Baker's host loop (baker::host::Live) owns the Config: it opens the stack the
 // project file names and, in debug builds, reloads what was saved, watching the files
-// through the operating system. Everything runs on the main thread.
+// through the operating system. A reload lands at the start of a frame, before its first
+// physics step or else its process step. Everything runs on the main thread.
 //
 //   var h = Baker.get_value("player.jump.height", 96.0)   # a read through the Config
 //   var g = Baker.tweak("world.gravity", 980.0)           # cached until the data changes
 //   Baker.toggle_layer("floaty")                          # an experiment, A/B
+//   var d = Baker.call_function("skirmish.damage", [6, 2, 0])  # a rule the data defines
 //
 // Properties of scene nodes are bound with a BakerBinding instead, which costs nothing per
 // frame.
@@ -19,13 +21,16 @@
 // (project_writes), so that "Keep" writes a value back from the editor process.
 //
 // For tools and agents, in debug builds (the user arguments after `--`):
-//   --console-port N    Baker's loopback console, with the Config tools bound:
+//   --console-port N    Baker's loopback console, with the Config tools bound (0: a free
+//                       port, which it prints and get_console_port() gives):
 //                       {config.explain p}, {config.set p v}, {config.toggle layer}, ...
 //   --console-write     also config.write_back and config.promote
 //   --baker COMMAND...  run one of Baker's tool commands (check, reference, eval, diff,
-//                       promote --patch, sim, compare) once the scene is ready, then quit;
-//                       --out FILE writes its output there too. Shipping builds run sim
-//                       and compare only.
+//                       promote --baker-patch, sim, compare, csv) once the scene is ready,
+//                       then quit; --baker-output FILE writes its output there too. The
+//                       commands see the bound properties of every scene, those no one has
+//                       loaded too (addons/baker/scan.gd reads them from their files).
+//                       Shipping builds run sim and compare only.
 //
 // sim runs the project's scenarios (sim/scenarios.dta) from the game's own frames: before
 // each run it reloads the current scene, whose script calls sim_ready() once it is set up,
@@ -41,10 +46,12 @@
 #include <baker/script.hpp>
 
 #include <godot_cpp/classes/node.hpp>
+#include <godot_cpp/classes/resource.hpp>
 #include <godot_cpp/variant/array.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/packed_string_array.hpp>
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <vector>
@@ -83,8 +90,87 @@ public:
     godot::Error set_layer_enabled(const godot::String& layer, bool enabled);
     // The new state.
     bool toggle_layer(const godot::String& layer);
+    // A layer the game finds after it starts: a content pack, a downloaded map's settings,
+    // a mod. On top of the stack, or where `options` say: {optional, enabled, below, above}
+    // (below or above a layer's name). Its file is watched as the project's layers are.
+    godot::Error push_layer(const godot::String& name, const godot::String& path,
+                            const godot::Dictionary& options);
+    // A layer from text the game received (from a server, a mod store, a save): read from
+    // the text alone, never a cache, and an #include in it is refused, so content from
+    // outside the game reaches no other file. Write-back refuses its values: it has no file.
+    godot::Error push_layer_text(const godot::String& name, const godot::String& text,
+                                 const godot::Dictionary& options);
+    // A directory of layers, for content packs, mods and plugins: each .dta file in `dir` is a
+    // layer named by its file, and each subdirectory that holds a layer.dta one named by the
+    // subdirectory, in the order dir/order.dta lists, then by name. Listed again at every
+    // reload, so a pack dropped in merges and one removed goes; watched as a project's
+    // layers are. Options as push_layer's; remove_layer(name) removes them all.
+    godot::Error push_layer_dir(const godot::String& name, const godot::String& dir,
+                                const godot::Dictionary& options);
+    // A layer as text, for a peer that must hold the same layer (a lobby's settings, sent by
+    // its host): reads back to the same tree, in every build. Empty, with the error pushed,
+    // for an unknown layer. "scratch" gives the live edits as a layer.
+    [[nodiscard]] godot::String layer_text(const godot::String& name) const;
+    // A text layer's text replaced in place (push_layer_text's), as a peer receives it again;
+    // the same text changes nothing.
+    godot::Error set_layer_text(const godot::String& name, const godot::String& text);
+    // The host's defines, for #ifdef and a project layer's (when ...): at open, the build's
+    // feature tags (OS.has_feature) among Godot's own (debug, release, pc, linux, ...) and
+    // those the project setting baker/feature_defines names (a dedicated server's "server",
+    // say). set_defines replaces them while the game runs: the layers that tested a changed
+    // name are read again.
+    godot::Error set_defines(const godot::PackedStringArray& defines);
+    [[nodiscard]] godot::PackedStringArray get_defines() const;
+    // Removes a layer, leaving no trace: what it set goes back to the layers below.
+    godot::Error remove_layer(const godot::String& name);
+    // Binds a Resource's properties to paths, as a BakerBinding binds a node's: the same
+    // shared tweaks, keyed paths ({kind}) and property_changed. A shader's parameters are a
+    // ShaderMaterial's properties ("shader_parameter/glow"). Returns the binding, a child of
+    // this runtime: free it, or unbind_resource, to unbind.
+    class BakerBinding* bind_resource(const godot::Ref<godot::Resource>& resource,
+                                      const godot::Dictionary& bindings);
+    void unbind_resource(const godot::Ref<godot::Resource>& resource);
+    // Binds every resource in `dir` (.tres, .res) as a record of the table `prefix`: the
+    // properties under its script's @export_group `group` (default "Tuning") bind to
+    // "prefix.KEY.property", where KEY is the file's name, or the field `key` names. The
+    // data holds only what a layer changes; the resource's own value is the bottom of the
+    // chain, and explain() names it. A property that holds a resource of a class bound as
+    // records is a key in the data, its tweak's one_of the table's keys: a layer retunes a
+    // reference by naming another record. A Curve is its points. Binding a prefix again
+    // replaces it; the number of records bound.
+    int64_t bind_records(const godot::String& prefix, const godot::String& dir,
+                         const godot::Dictionary& options);
+    void unbind_records(const godot::String& prefix);
+    // A record by its key, or null; every record of a table, {key: resource}.
+    [[nodiscard]] godot::Ref<godot::Resource> record(const godot::String& prefix,
+                                                     const godot::String& key) const;
+    [[nodiscard]] godot::Dictionary records(const godot::String& prefix) const;
+    // The table whose records are of `class_name` (a script's global name), or empty.
+    [[nodiscard]] godot::String record_table(const godot::String& class_name) const;
+    // A record's key in its table, or empty.
+    [[nodiscard]] godot::String record_key(const godot::String& prefix,
+                                           const godot::Object* resource) const;
     // Re-reads the files that changed; true if anything did.
     bool reload();
+
+    // --- A match, in lockstep. ---
+    // The data as the game reads it, every enabled layer merged and the live edits, as
+    // sixteen hex digits: equal data gives an equal fingerprint on every platform. Peers
+    // compare theirs before a match and at each turn's boundary.
+    [[nodiscard]] godot::String fingerprint() const;
+    // Locks the data for a match, and returns its fingerprint. Until unlock(), what would
+    // change the data waits, in order: a toggle (from the game or the editor), a live edit,
+    // a layer pushed or removed, a reload, a file saved; and the console waits with it.
+    // toggle_layer() returns the state the layer will have. Reads see the locked data.
+    godot::String lock();
+    // At a turn's boundary: applies what waited, all at once, with every file saved before
+    // it (read again, whether or not the watcher has reported it), and returns the new
+    // fingerprint. The data stays locked.
+    godot::String apply_held();
+    // Applies what waited, and unlocks.
+    void unlock();
+    [[nodiscard]] bool is_locked() const noexcept { return locked_; }
+    [[nodiscard]] int held_count() const noexcept { return int(held_.size()); }
 
     // --- Reading. ---
     // The value at `path`, read as `fallback`'s type; `fallback` if the path is missing or
@@ -93,13 +179,19 @@ public:
                                            const godot::Variant& fallback) const;
     // get_value, cached until the data next changes: for one-off reads in GDScript.
     godot::Variant tweak(const godot::String& path, const godot::Variant& fallback);
+    // Every value in the data, as the game reads it: [{path, value}], a path for each value
+    // that is not a table of others ("units.tank.price"), in the data's order. For a view of
+    // the whole data, whichever scene is open.
+    [[nodiscard]] godot::Array data_paths() const;
     // {layer, file, line}; empty if the path is missing.
     [[nodiscard]] godot::Dictionary source(const godot::String& path) const;
     // Every contributor to the value, bottom to top: [{layer, value, file, line, standing}].
     [[nodiscard]] godot::Array explain(const godot::String& path) const;
 
     // --- Live edits and the journal. ---
-    // Sets the value in the scratch layer, unsaved; bound properties follow.
+    // Sets the value in the scratch layer, unsaved; bound properties follow. A Dictionary
+    // sets each field it names, each a live edit of its own path, so a record's other fields
+    // stay: set_value("units.tank", {"price": 45}).
     godot::Error set_value(const godot::String& path, const godot::Variant& value);
     godot::Error clear_scratch(const godot::String& path);
     [[nodiscard]] godot::PackedStringArray unsaved() const;
@@ -130,6 +222,14 @@ public:
     // error at the call. Bound in the console's Context now, and in every tool command's.
     // Binding a name again replaces the function, so a scene that is reloaded binds its own.
     void bind_function(const godot::String& name, const godot::Callable& function);
+    // Calls the script function `name` with `args` and returns its result as a Godot value:
+    // a rule the data defines ({func ...} in a layer's #autorun, which a layer above defines
+    // again to change it), or a function a script binds. Each argument is one value: an
+    // Array or a Vector2 is one list. Nil, with the error pushed, if the call fails. While a
+    // tool command or sim runs, in that command's Context.
+    godot::Variant call_function(const godot::String& name, const godot::Array& args);
+    // Evaluates Baker script text, as the console does, and returns its value.
+    godot::Variant eval(const godot::String& text);
     // Under --baker sim: whether a run is in progress, and, from the scene the run reloaded,
     // that it is set up and the run may step.
     [[nodiscard]] bool is_simulating() const noexcept { return sim_ != nullptr; }
@@ -165,6 +265,13 @@ private:
     // next frame what a call here already reported.
     void changed_since();
     godot::Error fail(const baker::Error& error);
+    // While locked, keeps `change` for apply_held(); true if it was kept.
+    bool hold(std::function<void()> change);
+    // Live's frame, at the start of the engine's: before the first physics step, else before
+    // process, so that no node, and no work a node starts, sees part of a reload.
+    void begin_frame();
+    void physics_frame();
+    void process_frame();
     void present();
     godot::Error wrote(const baker::WriteReport& report);
     void read_arguments();
@@ -172,7 +279,14 @@ private:
     void run_tool_command();
     void bind_functions(baker::Context& ctx);
     void bind_into(baker::Context& ctx, baker::Symbol name);
+    // The build's feature tags that are defines: Godot's own that hold, and those the project
+    // setting baker/feature_defines names.
+    [[nodiscard]] static std::vector<std::string> feature_defines();
+    // The Context scripts run in: a tool command's or sim's while one runs, else the game's.
+    [[nodiscard]] baker::Context* script_context() noexcept;
+    godot::Variant evaluated(const baker::Expected<baker::Node>& result);
     void finish_tool(int status);
+    int run_csv(const baker::host::CommandLine& line);
     bool debugger_message(const godot::String& message, const godot::Array& data);
 
     static BakerRuntime* singleton_;
@@ -183,7 +297,13 @@ private:
     bool project_writes_ = false;
     bool capturing_ = false;      // registered with the editor's debugger
     bool session_dirty_ = false;  // the session changed since it was last sent
+    bool frame_begun_ = false;    // Live's frame began in this iteration of the main loop
+    bool locked_ = false;
+    std::vector<std::function<void()>> held_;  // what waits for apply_held()
     godot::Array last_written_;
+    std::vector<std::string> defines_;  // the host's, as the Config has them
+    godot::Dictionary records_;         // bind_records: prefix -> {key: resource}
+    godot::Dictionary record_tables_;   // a record's script class -> its prefix
 
     // Live binds the Config's tools into the Context, which outlives it.
     std::unique_ptr<baker::Context> context_;
@@ -197,11 +317,13 @@ private:
     std::string tool_project_;            // the project file, as the commands open it
     std::string tool_output_;             // what the command wrote
     baker::host::CommandHooks tool_hooks_;
+    std::vector<std::string_view> tool_defines_;  // views into defines_, for the command
     const baker::Config* tool_config_ = nullptr;  // the command's, once it has loaded
+    baker::Context* tool_context_ = nullptr;      // the command's, while its data is loaded
     std::unique_ptr<baker::host::SimRun> sim_;    // --baker sim, in progress
     bool sim_reloading_ = false;                  // the scene is being reset for the next run
     godot::Dictionary functions_;                 // bind_function: name -> Callable
-    std::string tool_out_;                        // --out FILE
+    std::string tool_out_;                        // --baker-output FILE
     int tool_frames_ = 0;
     int console_port_ = -1;  // --console-port N; -1: none
     bool console_write_ = false;

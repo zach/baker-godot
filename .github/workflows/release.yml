@@ -1,0 +1,82 @@
+# A release, drafted for a person to publish: run it from the Actions tab (or the API) with
+# the version CHANGELOG.md names. It builds the extension for Linux and Windows, debug and
+# shipping, packs the addon with them, and drafts the GitHub release "Baker for Godot
+# VERSION" on the commit it ran on, with that version's changelog entry as its notes and
+# the addon attached. A draft makes no tag: publishing it does, vVERSION, on that commit.
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "The version, as CHANGELOG.md's heading names it (0.2.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [ubuntu-24.04, windows-2022]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the extension (debug and shipping)
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Debug -DGODOTCPP_TARGET=template_debug -DBAKER_GODOT_WERROR=ON
+          cmake --build build --config Debug --parallel 4
+          cmake -B build-release -DCMAKE_BUILD_TYPE=Release -DGODOTCPP_TARGET=template_release -DBAKER_GODOT_WERROR=ON
+          cmake --build build-release --config Release --parallel 4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bin-${{ matrix.os }}
+          path: |
+            sample/addons/baker/bin/libbaker_godot.*.so
+            sample/addons/baker/bin/libbaker_godot.*.dll
+          if-no-files-found: error
+
+  draft:
+    needs: build
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: bin-*
+          path: sample/addons/baker/bin
+          merge-multiple: true
+      - name: The version's changelog entry, as the notes
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          awk -v v="$VERSION" '
+            $0 ~ "^## " v "( |$)" { on = 1; next }
+            on && /^## / { exit }
+            on { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "CHANGELOG.md has no entry for $VERSION" >&2
+            exit 1
+          fi
+          printf '\n**The attached addon** carries the libraries for Linux and Windows (x86_64), debug and release; copy `addons/baker` into a project. For macOS, build them from source (README, "Building").\n' >> notes.md
+      - name: The addon, with its libraries
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          ls sample/addons/baker/bin
+          cp LICENSE README.md CHANGELOG.md sample/addons/baker/
+          (cd sample && zip -qr "../baker-godot-$VERSION.zip" addons/baker)
+      - name: Draft the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          gh release create "v$VERSION" --draft --target "$GITHUB_SHA" \
+            --title "Baker for Godot $VERSION" --notes-file notes.md \
+            "baker-godot-$VERSION.zip"

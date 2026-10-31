@@ -1,0 +1,9 @@
+; The sample's scenarios: `--baker sim` runs each, from a fresh scene, for its seconds, and
+; judges it by its objectives (objectives.dta). The game draws no random numbers, so every
+; seed gives the same run.
+
+; From standing, one jump held to its apex and back to the ground.
+(scenario jump (desc "One held jump peaks at the data's jump height")
+   (seconds 2)
+   (at 0.5 {player.hold_jump})            ; settled on the floor first
+   (objectives jump.apex))

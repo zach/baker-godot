@@ -14,3 +14,39 @@
 (objective reach.not_second_platform (desc "Stays 20 px below the second platform, 180 px up")
    (measure {player.apex})
    (pass {<= $value 160}))
+
+(objective duel.tank_holds (desc "Infantry takes at least 3 hits to destroy a tank")
+   (measure {skirmish.hits infantry tank 0})
+   (pass {>= $value 3}))
+
+(objective duel.tank_not_a_wall (desc "And at most 4: infantry can still take a tank down")
+   (measure {skirmish.hits infantry tank 0})
+   (pass {<= $value 4}))
+
+(objective cards.fireball_cost (desc "Fireball costs what the data says, not its file's 3")
+   (measure {skirmish.card fireball cost})
+   (pass {== $value 2}))
+
+(objective cards.strike_upgrades (desc "Strike upgrades to bash, a card named in the data")
+   (measure {== {skirmish.card strike upgrade} bash})
+   (pass $value))
+
+(objective match.turn_seconds (desc "A turn's time limit: 30 on a server build, else none")
+   (measure {config.get match.turn_seconds})
+   (pass {or {== $value 0} {== $value 30}}))
+
+(objective economy.tank_by_turn_5 (desc "The opening's tank is built by turn 5")
+   (measure {skirmish.built_at tank})
+   (pass {<= $value 5}))
+
+(objective economy.tank_not_before_turn_4 (desc "Nor before turn 4: a tank is not a rush")
+   (measure {skirmish.built_at tank})
+   (pass {>= $value 4}))
+
+(objective economy.army_not_before_turn_6 (desc "Nor before turn 6: the opening has a breath")
+   (measure {if {== $ended army_ready} $steps 99})
+   (pass {>= $value 6}))
+
+(objective economy.army_by_turn_11 (desc "Blue's army is ready by turn 11")
+   (measure {if {== $ended army_ready} $steps 99})
+   (pass {<= $value 11}))

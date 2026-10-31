@@ -35,7 +35,7 @@ set(BAKER_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 set(BAKER_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 FetchContent_Declare(baker
   GIT_REPOSITORY https://github.com/zach/baker.git
-  GIT_TAG        v0.4.0)
+  GIT_TAG        v0.7.0)
 FetchContent_MakeAvailable(baker)
 
 add_library(baker_godot SHARED
@@ -44,7 +44,7 @@ add_library(baker_godot SHARED
   src/values.cpp
   src/baker_runtime.cpp
   src/baker_binding.cpp)
-target_link_libraries(baker_godot PRIVATE godot-cpp baker::baker baker::host)
+target_link_libraries(baker_godot PRIVATE godot-cpp baker::baker baker::host baker::tools)
 if(MSVC)
   target_compile_options(baker_godot PRIVATE /W4 /permissive- /utf-8 /EHs-c-)
   # fopen is fine: every result is checked.

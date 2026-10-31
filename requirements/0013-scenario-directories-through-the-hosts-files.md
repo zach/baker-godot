@@ -1,5 +1,8 @@
 # 0013: Scenario and objective directories read through the host
 
+**Shipped** in Baker 0.5.0 (`CommandHooks::list`); the integration lists directories through
+Godot's file access, and the sample's scenarios are a directory, read in its export too.
+
 ## The need
 
 A project's `(scenarios ...)` and `(objectives ...)` entries name directories the kit can

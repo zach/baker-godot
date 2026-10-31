@@ -1,5 +1,9 @@
 # 0016: The project's tool entry with arguments
 
+**Shipped** in Baker 0.5.0 (`Project::tool_args`). Not used here yet: the entry joins the
+binary with the project's directory, and this game's binary is the engine, found on the
+machine's PATH rather than in the project.
+
 ## The need
 
 A project file's `(tool ...)` entry can name the command that answers the kit's commands

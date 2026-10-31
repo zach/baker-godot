@@ -8,6 +8,7 @@ extends Node
 const LOCAL := "user://baker/local.dta"
 
 var failures := 0
+var completed := false  # run() reached its end: a script error stops it short
 
 
 func check(ok: bool, what: String) -> void:
@@ -20,6 +21,7 @@ func _ready() -> void:
 	DirAccess.remove_absolute(LOCAL)
 	Baker.reload()
 	await run()
+	check(completed, "the tests ran to their end, with no script error")
 	DirAccess.remove_absolute(LOCAL)
 	print("%d failure(s)" % failures)
 	get_tree().quit(failures)
@@ -28,7 +30,8 @@ func _ready() -> void:
 func run() -> void:
 	check(Baker.is_open(), "the project file opens")
 	var names := Baker.get_layers().map(func(l): return l["name"])
-	check(names == ["default", "local", "agent", "floaty", "scratch"],
+	check(names == ["default", "plugins", "cannon", "server", "local", "agent", "floaty", "piercing",
+		"scratch"],
 		"layers from the project file, bottom to top: %s" % [names])
 
 	# A player with one property the data has and one it lacks.
@@ -75,8 +78,8 @@ func run() -> void:
 
 	# Kept for oneself: written into the local layer, in user://.
 	check(Baker.write_back_to("player.jump.height", "local") == OK, "write_back_to local")
-	check(FileAccess.get_file_as_string(LOCAL).contains("(height 120"),
-		"local.dta holds the value: %s" % FileAccess.get_file_as_string(LOCAL))
+	check(FileAccess.get_file_as_string(LOCAL).contains("(/player.jump.height 120"),
+		"local.dta holds the value, as a row: %s" % FileAccess.get_file_as_string(LOCAL))
 	check(Baker.source("player.jump.height")["layer"] == "local", "and local supplies it")
 	check(Baker.journal()[0]["fate"] == "written", "the journal says written")
 	Baker.set_value("player.run.speed", 230.0)
@@ -133,16 +136,325 @@ func run() -> void:
 	check(bound.size() == 1 and bound[0]["object_id"] == player.get_instance_id()
 		and bound[0]["path"] == "player.jump.height",
 		"session() lists the bindings with their objects: %s" % [bound])
-	check(session["layers"].size() == 5, "session() gives the layers")
+	check(session["layers"].size() == 9, "session() gives the layers")
 	Baker.clear_scratch("player/run/speed")
 	check(player.run_speed == 220.0, "discarded, the property returns to the data's value")
 	check(binding.capture() == 0, "which is not taken for an edit")
+
+	# Tables, read whole: a keyed table is a Dictionary of records, and a list of records
+	# an Array.
+	var units_table: Dictionary = Baker.get_value("units", {})
+	var kinds := units_table.keys()
+	kinds.sort()
+	check(kinds == ["artillery", "heli", "infantry", "tank"],
+		"get_value(\"units\", {}) is the unit table, by kind: %s" % [kinds])
+	check(units_table["tank"] == {"hp": 10, "move": 6, "attack": 10, "armor": 2, "price": 50, "upkeep": 3},
+		"a record is a Dictionary of its fields: %s" % [units_table["tank"]])
+	check(units_table["artillery"]["reach"] == [2, 3] and units_table["heli"]["flies"] == 1,
+		"a field of several values is an Array, a flag a number")
+	check(Baker.get_value("buildings.hq", {}) == {"income": 20, "capture": 1000},
+		"one record by its path")
+	check(SkirmishCatalog.opening() == [&"infantry", &"infantry", &"tank"],
+		"a list of records, all of one tag, is an Array of them: %s" % [SkirmishCatalog.opening()])
+	check(SkirmishCatalog.affordable(50) == ["infantry", "tank"],
+		"the production menu reads the table whole: %s" % [SkirmishCatalog.affordable(50)])
+	check(Baker.get_value("units.tank.hp", {}) == {}, "a value that is not a table gives the fallback")
+	check(Baker.set_value("units.tank", {"price": 45}) == OK
+		and Baker.get_value("units.tank", {}) == {"hp": 10, "move": 6, "attack": 10, "armor": 2, "price": 45, "upkeep": 3},
+		"a Dictionary set live sets the fields it names, and the record keeps the rest: %s"
+			% [Baker.get_value("units.tank", {})])
+	check(Baker.unsaved() == PackedStringArray(["units/tank/price"]),
+		"each field a live edit of its own: %s" % [Baker.unsaved()])
+	check(Baker.set_value("probe.rec", {"a": [10, [&"@range", 0, 20]], "b": {"c": 1}, "kind": 2}) == OK
+		and Baker.get_value("probe.rec", {}) == {"a": 10, "b": {"c": 1}, "kind": 2},
+		"metadata, (@...) after a value, is left out; a field may be named kind: %s"
+			% [Baker.get_value("probe.rec", {})])
+	Baker.clear_scratch()
+
+	# Layers the game finds after it starts: a content pack merges into the unit table, and
+	# removing it leaves no trace.
+	var pack := FileAccess.open("user://baker/pack.dta", FileAccess.WRITE)
+	pack.store_string("(units (scout (hp 6) (move 8) (attack 4) (armor 0) (price 30)) (tank (price 40)))\n")
+	pack.close()
+	check(Baker.push_layer("pack", "user://baker/pack.dta", {"below": "local"}) == OK,
+		"push_layer: a content pack below local")
+	check(Baker.get_layers().map(func(l): return l["name"])
+		== ["default", "plugins", "cannon", "server", "pack", "local", "agent", "floaty", "piercing",
+			"scratch"],
+		"in its place in the stack")
+	check(SkirmishCatalog.units().has("scout") and SkirmishCatalog.units()["tank"]["price"] == 40,
+		"its records merge into the table: a new unit, a retuned price")
+	pack = FileAccess.open("user://baker/pack.dta", FileAccess.WRITE)
+	pack.store_string("(units (scout (hp 6) (move 8) (attack 4) (armor 0) (price 30)) (tank (price 35)))\n")
+	pack.close()
+	await until(func(): return SkirmishCatalog.units()["tank"]["price"] == 35)
+	check(SkirmishCatalog.units()["tank"]["price"] == 35, "an edit of the pack's file reloads")
+	check(Baker.remove_layer("pack") == OK and not SkirmishCatalog.units().has("scout")
+		and SkirmishCatalog.units()["tank"]["price"] == 50, "remove_layer: the table as it was")
+	DirAccess.remove_absolute("user://baker/pack.dta")
+	check(Baker.push_layer_text("mod", "(units (tank (hp 12)))") == OK
+		and SkirmishCatalog.units()["tank"]["hp"] == 12
+		and Baker.source("units.tank.hp")["layer"] == "mod",
+		"push_layer_text: a layer from received text, named by its source")
+	check(Baker.push_layer_text("sneaky", "#include \"skirmish.dta\"\n") != OK
+		and not Baker.get_layers().any(func(l): return l["name"] == "sneaky"),
+		"received text that includes a file is refused")
+	check(Baker.remove_layer("mod") == OK and SkirmishCatalog.units()["tank"]["hp"] == 10,
+		"and removed")
+
+	# A Resource's properties, bound as a node's: one path can feed a script's value and a
+	# shader's parameter.
+	var tweaks_at_start := BakerBinding.shared_tweak_count()
+	var stat_res: Resource = preload("res://tests/stats_probe.gd").new()
+	var material := ShaderMaterial.new()
+	material.shader = Shader.new()
+	material.shader.code = "shader_type canvas_item; uniform float glow = 1.0;"
+	var stats_binding: BakerBinding = Baker.bind_resource(stat_res,
+		{"max_hp": "units.{kind}.hp", "glow": "fx.glow"})
+	Baker.bind_resource(material, {"shader_parameter/glow": "fx.glow"})
+	check(stats_binding != null and stat_res.max_hp == 10.0,
+		"bind_resource: a Resource's property reads its record, by its own key: %s" % [stat_res.max_hp])
+	check(Baker.set_value("fx.glow", 2.5) == OK and stat_res.glow == 2.5
+		and material.get_shader_parameter("glow") == 2.5,
+		"one path feeds the Resource and the shader parameter: %s, %s"
+			% [stat_res.glow, material.get_shader_parameter("glow")])
+	Baker.clear_scratch()
+	Baker.unbind_resource(stat_res)
+	Baker.unbind_resource(material)
+	await get_tree().process_frame
+	check(BakerBinding.shared_tweak_count() == tweaks_at_start, "unbind_resource: their tweaks go")
+
+	# Bindings at scale: forty scouts and twenty tanks, one binding each through the path
+	# units.{kind}.max_hp, make two tweaks, and an edit of a kind reaches every unit of it.
+	var tweaks_before := BakerBinding.shared_tweak_count()
+	var units: Array[Node] = []
+	for i in 60:
+		var u: Node = preload("res://tests/unit_probe.gd").new()
+		u.kind = &"scout" if i < 40 else &"tank"
+		u.max_hp = 10.0 + i  # each its own, while the data has no units
+		add_child(u)
+		units.append(u)
+	var scouts := units.slice(0, 40)
+	var tanks := units.slice(40)
+	check(BakerBinding.shared_tweak_count() == tweaks_before + 2,
+		"sixty units of two kinds bind two tweaks: %d" % [BakerBinding.shared_tweak_count() - tweaks_before])
+	check(units.all(func(u): return u.max_hp == 10.0 + units.find(u)),
+		"the data has no units: each keeps its own value")
+	check(Baker.set_value("units.scout.max_hp", 50.0) == OK
+		and scouts.all(func(u): return u.max_hp == 50.0 and u.hp == 50.0)
+		and tanks.all(func(u): return u.max_hp == 10.0 + units.find(u)),
+		"an edit of units.scout.max_hp reaches every scout, and no tank")
+	check(scouts.all(func(u): return u.changes == 1),
+		"property_changed tells each scout once, which re-derives its hit points")
+	scouts[3].max_hp = 55.0
+	check(scouts[3].get_node("BakerBinding").capture() == 1
+		and scouts.all(func(u): return u.max_hp == 55.0),
+		"one scout changed from outside is an edit of the kind: every scout follows")
+	Baker.clear_scratch("units/scout/max_hp")
+	check(units.all(func(u): return u.max_hp == 10.0 + units.find(u)),
+		"the data without the path again: each unit has its own value back")
+	var stray: Node = preload("res://tests/unit_probe.gd").new()
+	stray.kind = &""
+	add_child(stray)
+	check(stray.get_node("BakerBinding").sources().is_empty(),
+		"a path whose key the node lacks is not bound")
+	stray.free()
+	for u in units:
+		u.free()
+	check(BakerBinding.shared_tweak_count() == tweaks_before,
+		"the units gone, their tweaks go: %d left" % [BakerBinding.shared_tweak_count()])
+
+	# Records: resources a file each, bound by one call, the data holding what it changes.
+	check(Baker.bind_records("cards", "res://skirmish/cards") == 40, "bind_records: forty cards, one call")
+	var strike: SkirmishCard = Baker.record("cards", "strike")
+	var bash: SkirmishCard = Baker.record("cards", "bash")
+	var fireball: SkirmishCard = Baker.record("cards", "fireball")
+	check(strike == load("res://skirmish/cards/strike.tres"), "  the game's own loaded resource")
+	check(fireball.cost == 2 and strike.cost == 1 and strike.title == "Strike",
+		"  a field the data changes reads the data; the rest, and what is not tuning, the file")
+	var card_chain: Array = Baker.explain("cards.strike.cost")
+	check(card_chain.size() == 1 and card_chain[0]["resource"] == "res://skirmish/cards/strike.tres",
+		"  explain() names the resource beneath the layers: %s" % [card_chain])
+	check(strike.upgrade == bash, "  a reference to a card is the card")
+	Baker.set_value("cards.strike.upgrade", &"fireball")
+	check(strike.upgrade == fireball, "  retuned by the other card's name")
+	Baker.clear_scratch()
+	check(strike.upgrade == bash, "  and back to the file's")
+	check(is_equal_approx(strike.scaling.sample(2.0), 1.5), "a Curve binds: the file's line, 1.5 at 2")
+	Baker.set_value("cards.strike.scaling", [[1, 1], [3, 5], [5, 6]])
+	var baker_at := float(Baker.eval("{curve.sample cards.strike.scaling 2}"))
+	check(strike.scaling.sample(3.0) == 5.0 and absf(strike.scaling.sample(2.0) - baker_at) < 0.01,
+		"  set as points, Godot samples it as Baker does: %.3f, %.3f" % [strike.scaling.sample(2.0), baker_at])
+	Baker.clear_scratch()
+	check(is_equal_approx(strike.scaling.sample(2.0), 1.5), "  and the file's curve is back")
+	var card_binding: BakerBinding = Baker.get_node("Resource%d" % strike.get_instance_id())
+	strike.damage = 9
+	strike.upgrade = fireball
+	card_binding.capture()
+	check(Baker.unsaved().has("cards/strike/damage") and Baker.get_value("cards.strike.upgrade", &"") == &"fireball",
+		"a resource changed from outside is a live edit, a reference as its card's name: %s" % [Baker.unsaved()])
+	Baker.clear_scratch()
+	check(strike.damage == 6 and strike.upgrade == bash, "  discarded, the file's values")
+	Baker.unbind_records("cards")
+	check(Baker.record("cards", "strike") == null and BakerBinding.resource_of("cards.strike.cost") == "",
+		"unbind_records: the cards' tweaks go")
+
+	# Rules in Baker's script: the data defines them, the game calls them.
+	check(Baker.call_function("skirmish.damage", [6, 2, 0]) == 4,
+		"call_function: a rule the data defines, with Godot values: 4")
+	check(SkirmishRules.damage("infantry", "tank") == 4 and SkirmishRules.hits_to_kill("infantry", "tank") == 3,
+		"read with the unit table: infantry hits a tank for 4, three hits")
+	check(Baker.eval("{skirmish.damage 6 2 1}") == 6 and Baker.eval("{+ 1 2}") == 3,
+		"eval: script text, as the console takes it")
+	Baker.set_value("rules.level_bonus", 3)
+	check(SkirmishRules.damage("infantry", "tank", 1) == 7, "a rule reads the data: a live edit of its bonus")
+	Baker.clear_scratch()
+	Baker.toggle_layer("piercing")
+	await until(func(): return SkirmishRules.damage("infantry", "tank") == 5)
+	check(SkirmishRules.hits_to_kill("infantry", "tank") == 2,
+		"an experiment layer changes the rule, not a number: armor stops half, two hits")
+	Baker.toggle_layer("piercing")
+	await until(func(): return SkirmishRules.damage("infantry", "tank") == 4)
+	check(SkirmishRules.damage("infantry", "tank") == 4, "toggled off, the base rule is back")
+	check(Baker.call_function("skirmish.no_such_rule", []) == null and Baker.get_last_error() != "",
+		"a call that fails gives null, and says why: %s" % Baker.get_last_error())
+	check(Baker.call_function("skirmish.damage", [Vector2(1, 2), 0, 0]) == null,
+		"an argument is one value: a Vector2 is a list, which the rule cannot add")
+
+	# Builds: the feature tags that are defines, and a layer for a server build.
+	var defines := Baker.get_defines()
+	check(defines.has("debug"), "the build's feature tags are defines: %s" % [defines])
+	check(Baker.get_value("match.turn_seconds", -1) == 0, "  a build without `server` leaves its layer out")
+	var as_server := defines.duplicate()
+	as_server.append("server")
+	check(Baker.set_defines(as_server) == OK and Baker.get_value("match.turn_seconds", -1) == 30,
+		"  set_defines: with `server`, its (when server) layer is in")
+	Baker.set_defines(defines)
+	check(Baker.get_value("match.turn_seconds", -1) == 0, "  and out again")
+
+	# Plugins: a pack each, found in a directory; a plugin's scene binds under its own name.
+	var cannon: Node = load("res://plugins/cannon/cannon.tscn").instantiate()
+	add_child(cannon)
+	check(cannon.gravity == 700.0, "a plugin's scene binds minigames.{plugin}.gravity from its own pack")
+	cannon.free()
+	DirAccess.make_dir_recursive_absolute("user://baker/mods/kite")
+	f = FileAccess.open("user://baker/mods/kite/layer.dta", FileAccess.WRITE)
+	f.store_string("(minigames (kite (speed 5)))\n")
+	f.close()
+	check(Baker.push_layer_dir("mods", "user://baker/mods", {"below": "local"}) == OK
+		and Baker.get_layers().map(func(l): return l["name"]).has("kite"),
+		"push_layer_dir: a directory of mods found after startup, a layer each")
+	var kite: Node = load("res://tests/kite_probe.gd").new()
+	var kite_binding := BakerBinding.new()
+	kite_binding.bindings = {"speed": "minigames.{plugin}.speed"}
+	kite.add_child(kite_binding)
+	add_child(kite)
+	check(kite.speed == 5.0, "  a mod's node binds under its plugin's name")
+	Baker.set_value("minigames.kite.speed", 7.0)
+	check(Baker.write_back("minigames.kite.speed") == OK
+		and FileAccess.get_file_as_string("user://baker/mods/kite/layer.dta").contains("(speed 7"),
+		"  write-back lands in the mod's own file: %s"
+			% FileAccess.get_file_as_string("user://baker/mods/kite/layer.dta").strip_edges())
+	Baker.clear_scratch()
+	f = FileAccess.open("user://baker/mods/extra.dta", FileAccess.WRITE)
+	f.store_string("(minigames (extra (on 1)))\n")
+	f.close()
+	Baker.reload()
+	check(Baker.get_value("minigames.extra.on", 0) == 1, "  a mod dropped in merges at the next reload")
+	DirAccess.remove_absolute("user://baker/mods/extra.dta")
+	Baker.reload()
+	check(Baker.get_value("minigames.extra.on", 0) == 0
+		and not Baker.get_layers().map(func(l): return l["name"]).has("extra"), "  and one removed goes")
+	kite.free()
+	Baker.remove_layer("mods")
+	DirAccess.remove_absolute("user://baker/mods/kite/layer.dta")
+	DirAccess.remove_absolute("user://baker/mods/kite")
+	DirAccess.remove_absolute("user://baker/mods")
+
+	# A lobby: a layer as text, for a peer, and replaced in place when it comes again.
+	Baker.push_layer_text("lobby", "(match (turn_seconds 45))", {})
+	var lobby := Baker.layer_text("lobby")
+	check(lobby.contains("turn_seconds 45"), "layer_text: the lobby's layer, to send: %s" % lobby.strip_edges())
+	check(Baker.set_layer_text("lobby", "(match (turn_seconds 60))") == OK
+		and Baker.get_value("match.turn_seconds", 0) == 60
+		and Baker.get_layers()[Baker.get_layers().size() - 2]["name"] == "lobby",
+		"set_layer_text: received again, replaced in its place")
+	Baker.remove_layer("lobby")
+
+	# A reload lands at the frame's start: a node processed before every other sees it in the
+	# same frame as one processed after.
+	var early: Node = load("res://tests/frame_probe.gd").new()
+	var late: Node = load("res://tests/frame_probe.gd").new()
+	early.process_priority = -1000
+	late.process_priority = 1000
+	for probe in [early, late]:
+		probe.player = player
+		add_child(probe)
+	for height in [113.0, 114.0, 115.0]:
+		f = FileAccess.open(LOCAL, FileAccess.WRITE)
+		f.store_string("(player (jump (height %d)))\n" % height)
+		f.close()
+		await until(func(): return player.jump_height == height)
+	await get_tree().process_frame
+	var torn := []
+	for frame in early.seen:
+		if late.seen.has(frame) and early.seen[frame] != late.seen[frame]:
+			torn.append([frame, early.seen[frame], late.seen[frame]])
+	check(player.jump_height == 115.0 and torn.is_empty(),
+		"no frame sees part of a reload: the first node and the last read alike %s" % [torn])
+	early.free()
+	late.free()
+
+	# A match in lockstep: the data's fingerprint, and a lock that holds every change for the
+	# turn's boundary.
+	var print0 := Baker.fingerprint()
+	check(print0.length() == 16 and print0 == Baker.fingerprint(),
+		"fingerprint(): sixteen hex digits, the same for the same data: %s" % print0)
+	Baker.set_value("player.jump.height", 111.0)
+	check(Baker.fingerprint() != print0, "a live edit moves it")
+	Baker.clear_scratch()
+	check(Baker.fingerprint() == print0, "and it returns with the data")
+	check(Baker.lock() == print0 and Baker.is_locked(), "lock() returns it")
+	var peak: float = Baker.get_value("player.jump.time_to_peak", 0.0)
+	check(Baker.toggle_layer("floaty"), "a toggle during a match says the state it will have")
+	check(Baker.set_value("player.jump.height", 108.0) == OK, "a live edit is taken")
+	f = FileAccess.open(LOCAL, FileAccess.WRITE)
+	f.store_string("(player (run (speed 230)))\n")
+	f.close()
+	for i in 10:
+		await get_tree().process_frame
+	check(Baker.get_value("player.jump.time_to_peak", 0.0) == peak and player.jump_height == 115.0
+		and Baker.get_value("player.run.speed", 0) == 220 and Baker.fingerprint() == print0,
+		"and with a file saved, all wait for the turn's boundary: the data is as locked")
+	check(Baker.held_count() == 2, "held_count(): the toggle and the edit")
+	var print1 := Baker.apply_held()
+	check(Baker.get_value("player.jump.time_to_peak", 0.0) == 0.5 and player.jump_height == 108.0
+		and Baker.get_value("player.run.speed", 0) == 230,
+		"apply_held(): all of it at once, the saved file too")
+	check(print1 != print0 and print1 == Baker.fingerprint() and Baker.is_locked(),
+		"it returns the new fingerprint, and the data stays locked")
+	f = FileAccess.open(LOCAL, FileAccess.WRITE)
+	f.store_string("(player (run (speed 235)))\n")
+	f.close()
+	Baker.apply_held()
+	check(Baker.get_value("player.run.speed", 0) == 235,
+		"a file saved the moment before the boundary is in it, whatever the watcher has seen")
+	Baker.toggle_layer("floaty")
+	Baker.unlock()
+	check(not Baker.is_locked() and Baker.held_count() == 0
+		and not Baker.get_layers()[3]["enabled"], "unlock() applies what waited")
+	Baker.clear_scratch()
+	f = FileAccess.open(LOCAL, FileAccess.WRITE)
+	f.store_string("")
+	f.close()
+	Baker.reload()
 
 	# A bound node gone: its tweaks go with it.
 	player.queue_free()
 	await get_tree().process_frame
 	check(Baker.set_value("player.jump.height", 130.0) == OK, "edits after the node is freed")
 	Baker.clear_scratch()
+	completed = true
 
 
 ## Waits a frame at a time, up to a second, until `condition` holds.

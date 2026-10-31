@@ -1,5 +1,9 @@
 # 0012: A function bound at runtime describes its parameters
 
+**Shipped** in Baker 0.5.0 (`Context::declare` with a body); `Baker.bind_function` declares
+each function with its GDScript signature, and `tests/agent.sh` checks that `check` catches
+both calls below.
+
 ## The need
 
 A host can register a script function that has a body and a described signature at once:

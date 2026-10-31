@@ -20,6 +20,9 @@ rm -rf "$work/project/.godot"
 # export (the project file marks its layer dev_only), or the game ships a change no person
 # reviewed.
 printf '(player (jump (height 300)))\n' > "$work/project/data/agent.dta"
+# A dedicated server build: the feature tag `server`, which the project setting
+# baker/feature_defines makes a define, so data/server.dta's (when server) layer is in.
+sed -i.bak 's/^custom_features=""/custom_features="server"/' "$work/project/export_presets.cfg"
 "$godot" --headless --path "$work/project" --import >/dev/null 2>&1 || true
 "$godot" --headless --path "$work/project" --import >/dev/null 2>&1
 mkdir -p "$work/out"
@@ -34,18 +37,28 @@ check() {
     if [ "$1" -eq 0 ]; then echo "ok   $2"; else echo "FAIL $2"; failures=$((failures + 1)); fi
 }
 [ -f "$game" ]; check $? "exports $preset"
-timeout 60 "$game" --headless --fixed-fps 60 -- --baker sim --scenario jump --results "$work/sim" \
+timeout 60 "$game" --headless --fixed-fps 60 -- --baker sim --baker-scenario jump --baker-results "$work/sim" \
     >/dev/null 2>&1
 check $? "the exported game runs the jump scenario"
 "$py" - "$work/sim/results.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
 print("     ", json.dumps(d["runs"][0]["objectives"]))
-assert d["schema"] == "baker.sim/1.1" and d["status"] == "passed", d
+assert d["schema"] == "baker.sim/1.3" and d["status"] == "passed", d
 # tuning.dta's 96: not the scene's 80, nor the 300 of an agent.dta (dev_only: never shipped)
 assert abs(d["runs"][0]["objectives"][0]["value"] - 96) <= 2, d
 PY
 check $? "  tuning.dta's values read from the package, without local or agent.dta"
+timeout 60 "$game" --headless --fixed-fps 60 -- --baker sim --baker-scenario cards >/dev/null 2>&1
+check $? "  the cards, listed from the package and bound, read the data's change"
+timeout 60 "$game" --headless --fixed-fps 60 -- --baker sim --baker-scenario match \
+    --baker-results "$work/match" >/dev/null 2>&1
+"$py" - "$work/match/results.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+assert d["runs"][0]["objectives"][0]["value"] == 30, d
+PY
+check $? "  a server build (its feature tag) reads its own layer: a turn of 30 s"
 timeout 60 "$game" --headless -- --baker check >/dev/null 2>&1; [ $? -eq 2 ]
 check $? "  a shipping build: it runs sim and compare, and refuses check"
 pck="${game%.*}.pck"  # the export plugin leaves dev_only layers' files out of the package
