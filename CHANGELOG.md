@@ -3,9 +3,11 @@
 Releases of Baker for Godot, newest first. Versions follow [semantic
 versioning](https://semver.org); before 1.0.0, a minor version may change the API.
 
-## Unreleased
+## 0.3.0 - 2026-10-31
 
-On Baker 0.7.0 and Godot 4.7.
+Phase 3: C#, on Godot 4.7. Built on Baker 0.7.0 and godot-cpp 10.0.0 (API 4.7), for Godot
+4.7.2, on Linux and Windows; the C# API is the NuGet package `Baker.Godot`, attached to the
+release beside the addon. macOS stays paused in CI.
 
 - **Godot 4.7.** The integration builds with godot-cpp 10.0.0 at API 4.7 and runs on Godot
   4.7.2; the extension's `compatibility_minimum` is 4.7. CI, the export template and the

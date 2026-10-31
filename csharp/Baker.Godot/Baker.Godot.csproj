@@ -9,7 +9,7 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <RootNamespace>BakerGodot</RootNamespace>
     <PackageId>Baker.Godot</PackageId>
-    <Version>0.3.0-dev</Version>
+    <Version>0.3.0</Version>
     <Authors>Zach Baker</Authors>
     <Description>Baker's layered tuning data in a Godot 4.7 C# game: typed reads, layers, live edits, rules, records and lockstep, over the Baker for Godot addon.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>

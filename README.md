@@ -4,10 +4,11 @@ An integration of [Baker](https://github.com/zach/baker) with [Godot](https://go
 tuning data in layers (`default`, `local`, `agent`, experiments), each value knowing where
 it came from, and values tuned while playing written back to their line in the data.
 
-Version 0.2.0 (`CHANGELOG.md`), on Baker 0.7.0 and Godot 4.5.1, for Linux, Windows and
-macOS: the runtime, the editor loop, agents and exports (phase 1), and what a game shaped
-like a real one needs (phase 2): bindings at scale, tables, runtime layers and records,
-lockstep, rules in script, turn scenarios, the dock's data view, and a harder evaluation.
+Version 0.3.0 (`CHANGELOG.md`), on Baker 0.7.0 and Godot 4.7.2, for Linux and Windows: the
+runtime, the editor loop, agents and exports (phase 1); what a game shaped like a real one
+needs (phase 2): bindings at scale, tables, runtime layers and records, lockstep, rules in
+script, turn scenarios, the dock's data view, and a harder evaluation; and C# (phase 3):
+the `Baker.Godot` NuGet package, values worker threads read, and the skirmish in C#.
 
 ## The demonstration
 
@@ -334,8 +335,8 @@ long hp = (long)now.Get(units)["tank"]["hp"];
 4. **Requirements back to Baker** (done), as notes in `requirements/`: 0001 to 0020 shipped
    in Baker and are in use here; 0021 is built on Baker's main, for its next release.
 5. **Phase 2** (done, `dev/phase-2-plan.md`): the skirmish sample, steps 1 to 8.
-6. **Phase 3** (next, `dev/phase-3-plan.md`): Godot 4.7, a C# package on NuGet, values a
-   threaded simulation reads, and the skirmish ported to C#.
+6. **Phase 3** (done, `dev/phase-3-plan.md`): Godot 4.7, the C# package on NuGet, values a
+   threaded simulation reads, and the skirmish ported to C#, giving the GDScript's results.
 
 ## Requirements for Baker
 
