@@ -109,8 +109,10 @@ the remote inspector sends, and checks the diff.
   translation key (`(name CARD_FIREBALL)`), and the game passes the key to `tr()`.
 - **Tables, read whole.** With a Dictionary fallback, `Baker.get_value("units", {})` is a
   keyed table as a Dictionary of records, `{"tank": {"hp": 10, "price": 50, ...}, ...}`; with
-  an Array fallback, a list of records with one tag is an Array of them
-  (`(opening (build infantry) (build tank))` at `ai.opening` is `[&"infantry", &"tank"]`).
+  an Array fallback, a list is an Array of its values (`(opening infantry tank)` at
+  `ai.opening` is `[&"infantry", &"tank"]`), and a list of records with one tag an Array of
+  them. Write a list a layer may retune as plain values: a layer restates it whole or
+  changes it with `#append` and `#drop`, where same-tagged records merge by their tag.
   Metadata after a value, `(@range 0 10)` or `(@desc "...")`, is left out; any other name,
   `kind` or `range` too, is a field. Shapes in the data hold the tables to their fields
   (`sample/data/skirmish.dta`). `set_value("units.tank", {"price": 45})` sets each field it

@@ -120,6 +120,54 @@ more hit points, the rule redefined whole, the eight weak cards by name, a refus
 names `economy.tank_not_before_turn_4`). The port changes nothing the agent sees: the same
 commands, the same results, so the skill carries over to a C# game unchanged.
 
+## Phase 3, the third round: tables, lists and references
+
+Run on 2026-11-01 at the commit this file is in (Baker 0.7.0, Godot 4.7.2, Linux), same
+model and client, three new skirmish tasks, three runs each on the C# port
+(`results-phase3b-cs.csv`) and three on the GDScript skirmish (`results-phase3b-gd.csv`),
+judged over seeds 1-5 and, for two of them, by a scenario of the judge's own, written into
+the copy after the planted files were compared and run over the data the agent left.
+
+What changed: the tasks change a table's and a list's shape, not only a value in them.
+The match reads its unit table and its opening whole (the C# port from a published
+snapshot), so a record a layer adds, or a list it reorders, is what the match plays.
+`new-unit` asks for a fifth unit the AI buys "now and then" with the economy's pacing kept;
+`open-artillery` asks for an artillery second in the opening with the tank and the army
+landing when they do now; `free-upgrades` asks for each 0-cost card to upgrade into a
+1-cost card, nothing else touched. Making them possible changed the sample: the opening
+was a list of `(build ...)` records, and a layer restating one merges into the first by its
+tag, silently (`diff` reported nothing changed); it is a plain list now, which a layer
+restates or extends with `#append`, and the skill teaches tables and lists.
+
+**Result: 12 of 18 runs succeeded,** for $1.97 on the C# port and $1.66 on the GDScript
+skirmish: the first task this evaluation has that agents fail.
+
+| task | C# | GDScript | tool calls (mean) | what the agents wrote |
+|---|---|---|---|---|
+| `new-unit` | 0/3 | 0/3 | 11.3, 10.7 | a mech of 14 or 16 hit points, move 4, priced 52 to 55, at weight 1 |
+| `open-artillery` | 3/3 | 3/3 | 10, 8.3 | `(opening infantry artillery tank)`, and the start's points raised (40 to 53) or the artillery priced down (25 to 40), the tank back on turn 5 |
+| `free-upgrades` | 3/3 | 3/3 | 7, 5.3 | six overrides, each free card into a 1-cost card, often by theme (gust into gale) |
+
+**What the agents did.** Every run read the unit shape or the reference before adding the
+mech, and every mech passed `check` with every required field; every run gave it a weight,
+having read that the AI never buys a kind without one. In `open-artillery` every run saw the
+tank slip to turn 7 at the artillery's price of 60, then found a lever that put it back
+(points at the start, or the artillery's price) and held the army's turns over five seeds.
+In `free-upgrades` every run named the 1-cost cards from the card files or the csv and set
+only `upgrade`, and `check` held each name to the cards that exist. No run touched a data
+file, a card, a scenario or an objective; the C# runs put `--skirmish cs` in every command.
+
+**Where they struggled: the purchase against the pacing.** In `new-unit` every run found
+the tension the task holds: at weight 2 or more a mech of the tank's price breaks
+`economy.army_by_turn_11` on seed 3, so all six chose weight 1, priced the mech at 52 to 55
+("near a tank"), and reported the pacing unchanged, which it was. Five reported the AI
+buying it, from probe matches of their own run to 30 turns; the judge plays the matches the
+scenarios play, which end when blue's army is ready (turn 9 to 11), and in 30 of those a
+mech at 55 and weight 1 is bought in none. A fix exists inside every objective: at price
+45 and weight 3 the AI buys one in 7 of 30 such matches, with the economy's five seeds
+passing; no run tried a price below the tank's. The complaint's "priced near a tank" held
+them there, and none judged "now and then" by the matches the objectives judge.
+
 ## Protocol
 
 - **Tasks** (`harness.py`): each a person's complaint over a fresh copy of the repository,
@@ -176,3 +224,7 @@ Build the extension (README), then:
 ```
 python3 eval/harness.py --godot PATH/TO/godot --runs 3 --jobs 3 --model claude-sonnet-5-5
 ```
+
+The skirmish's tasks need Godot's .NET build as the path (the sample is a C# project);
+`--skirmish cs` runs them on the C# port, and `--tasks new-unit,open-artillery,free-upgrades`
+the third round alone.

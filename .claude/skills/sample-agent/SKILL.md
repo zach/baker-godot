@@ -92,6 +92,14 @@ random number: the same data and scenario give the same result on every seed.
   its twin, so aim inside the window and let `compare` say. If what a person asks cannot
   pass every objective, do not make it pass some: say which objective stands in the way,
   and propose the change to that objective separately.
+- **Tables and lists:** `units` and `buildings` are keyed tables, which layers merge by
+  name: `(units (tank (armor 3)))` retunes one field, and `(units (mech (hp 16) (move 3)
+  (attack 9) (armor 2) (price 55) (upkeep 3)))` adds a record, which `check` holds to the
+  `#shape` in `skirmish.dta` (every field the shape requires, each in its range); give a
+  new kind a weight in `ai.weights` or the AI never buys it. `ai.opening` is a list: a layer
+  restates it whole, `(ai (opening infantry artillery tank))`, or changes it in place,
+  `(ai (opening #append heli))` or `#drop`. The game reads a table or a list whole, so a
+  record a layer adds, or a list it reorders, is what the match plays.
 - **Rules:** the skirmish's damage is a script function in `data/skirmish.dta`, defined in
   its `#autorun`. To change a rule rather than a number, define it again in `agent.dta`'s
   own `#autorun`, whole, with its `(@doc ...)`; `sim` judges it as it judges a value.

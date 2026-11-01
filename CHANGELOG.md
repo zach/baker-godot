@@ -3,6 +3,19 @@
 Releases of Baker for Godot, newest first. Versions follow [semantic
 versioning](https://semver.org); before 1.0.0, a minor version may change the API.
 
+## Unreleased
+
+- **The AI's opening is a plain list** (`(opening infantry infantry tank)` in
+  `sample/data/skirmish.dta`), so a layer restates it whole or changes it with `#append`
+  and `#drop`. As a list of `(build ...)` records it could not be retuned from a layer: a
+  layer's restatement merged into the first record by its tag, silently. The README's note
+  on reading lists says which form to write, and the agent skill teaches tables and lists.
+- **The evaluation's third round on the skirmish** (`eval/README.md`): three tasks that
+  change a table's and a list's shape, not only a value, and records that reference records
+  (a fifth unit the AI must buy, an artillery in the opening, upgrades for the free cards),
+  judged by scenarios of the judge's own run over the data the agent left; run on both the
+  GDScript skirmish and its C# port: 12 of 18, the first task agents fail.
+
 ## 0.3.0 - 2026-10-31
 
 Phase 3: C#, on Godot 4.7. Built on Baker 0.7.0 and godot-cpp 10.0.0 (API 4.7), for Godot

@@ -63,6 +63,13 @@ the package (step 2); `export.sh` exports the C# sample with the .NET templates 
 the evaluation's six skirmish tasks rerun on the port give 18 of 18 ($2.54), the agents'
 fixes those of the GDScript round, with `--skirmish cs` in every command. Phase 3 is done.
 
+**After the release, a third round of the evaluation** (`eval/README.md`): three tasks
+that change a table's and a list's shape through the data the C# match reads whole from its
+snapshot, run on both ports. 12 of 18: `new-unit` fails every run, the agents weighing the
+economy's pacing over the purchase and judging the purchase by probe matches longer than
+the ones the objectives play. The round found the sample's opening unlayerable as a list
+of `(build ...)` records; it is a plain list now.
+
 ## With Baker
 
 Probably nothing new: the snapshot is built from what the runtime already reads. If a
