@@ -89,7 +89,9 @@ random number: the same data and scenario give the same result on every seed.
   `save`). After the opening, seeds play differently: judge a change over `--baker-seeds
   1-5` or more, never one seed, and do not expect to work an outcome out by hand. Several
   objectives bound a value from both sides: a change large enough to fix one often breaks
-  its twin, so aim inside the window and let `compare` say. If what a person asks cannot
+  its twin, so aim inside the window and let `compare` say. A match the scenarios play
+  ends when blue's army is ready, turn 9 to 11: judge what the AI does, and what a person
+  sees of it, by those turns, not by a longer match of your own. If what a person asks cannot
   pass every objective, do not make it pass some: say which objective stands in the way,
   and propose the change to that objective separately.
 - **Tables and lists:** `units` and `buildings` are keyed tables, which layers merge by

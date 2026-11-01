@@ -14,7 +14,10 @@ versioning](https://semver.org); before 1.0.0, a minor version may change the AP
   change a table's and a list's shape, not only a value, and records that reference records
   (a fifth unit the AI must buy, an artillery in the opening, upgrades for the free cards),
   judged by scenarios of the judge's own run over the data the agent left; run on both the
-  GDScript skirmish and its C# port: 12 of 18, the first task agents fail.
+  GDScript skirmish and its C# port: 12 of 18, the first task agents fail; rerun with the
+  skill saying to judge the AI by the matches the scenarios play, 1 of 6.
+- **Requirement note 0022:** a layer over a list written as same-tagged records merges
+  into the first record silently; the note asks Baker's check and diff to report it.
 
 ## 0.3.0 - 2026-10-31
 

@@ -168,6 +168,19 @@ mech at 55 and weight 1 is bought in none. A fix exists inside every objective: 
 passing; no run tried a price below the tank's. The complaint's "priced near a tank" held
 them there, and none judged "now and then" by the matches the objectives judge.
 
+**With one line more in the skill** (a match the scenarios play ends when blue's army is
+ready, turn 9 to 11: judge what the AI does by those turns), `new-unit` rerun three times
+on each port (`results-phase3c-cs.csv`, `results-phase3c-gd.csv`): 1 of 6, for $1.96, in
+12 to 19 tool calls and 71 to 280 s, against 9 to 15 and 43 to 112 s before. Every run now
+measured the purchase in the game's own matches and reported its rate plainly ("1 match in
+20", "3 of 60 seeds", "thinner than now and then"); five still priced the mech at 45 to 55
+with a weight of 1 or 1.5, having seen weight 2 at the tank's price break seed 3, and chose
+the pacing. The one success priced it at 45 with weight 4, bought in 2 of 20 seeds with
+the five judged seeds passing. The task needs both levers moved at once, price down and
+weight up, and a search over seeds for each pair; an agent that reads the complaint as a
+constraint on the price does not look there. It stays in the harness as the task agents
+fail, and its reports are the honest kind the skill asks for.
+
 ## Protocol
 
 - **Tasks** (`harness.py`): each a person's complaint over a fresh copy of the repository,

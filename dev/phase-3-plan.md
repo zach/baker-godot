@@ -67,8 +67,10 @@ fixes those of the GDScript round, with `--skirmish cs` in every command. Phase 
 that change a table's and a list's shape through the data the C# match reads whole from its
 snapshot, run on both ports. 12 of 18: `new-unit` fails every run, the agents weighing the
 economy's pacing over the purchase and judging the purchase by probe matches longer than
-the ones the objectives play. The round found the sample's opening unlayerable as a list
-of `(build ...)` records; it is a plain list now.
+the ones the objectives play; with the skill saying to judge by the matches the scenarios
+play, 1 of 6, the reports now naming the rate and choosing the pacing. The round found the
+sample's opening unlayerable as a list of `(build ...)` records; it is a plain list now,
+and requirement note 0022 asks Baker's check and diff to report such a merge.
 
 ## With Baker
 
