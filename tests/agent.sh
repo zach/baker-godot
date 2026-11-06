@@ -100,6 +100,12 @@ bad '(player (jump (hieght 120)))' bad3.json; [ $? -eq 0 ]
 check $? "  a misspelled key passes check"
 json bad3.json 'd["passed"] and any("hieght" in w["message"] for w in d["tweak_warnings"])'
 check $? "    with a warning that names it"
+json check.json 'not any(w["path"].startswith("cards.") for w in d["tweak_warnings"])'
+check $? "  no warning for a card's values the data leaves out: they are its file's"
+bad '(ai (weights (tank 3) (tank 4)))' bad4.json; [ $? -eq 0 ]
+check $? "  a layer that writes one tag twice in a table passes check"
+json bad4.json 'd["passed"] and [(w["file"], w["line"], w["path"]) for w in d["warnings"]] == [("data/agent.dta", 1, "ai.weights.tank")] and "merges into the same record" in d["warnings"][0]["message"]'
+check $? "    with a warning at its row: the rows fold into one record"
 
 # The skirmish's tables are held to their shapes: a record with a field of the wrong type,
 # out of range, or missing fails check; a field no shape declares is a warning.

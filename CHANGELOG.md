@@ -5,6 +5,17 @@ versioning](https://semver.org); before 1.0.0, a minor version may change the AP
 
 ## Unreleased
 
+- **Baker 0.8.0.** The integration builds on it; the sample's data needs no migration
+  (`baker_migrate --check` finds nothing). What it brings here: a record's tuning fields,
+  bound by `bind_records`, are tweaks the data may leave out (requirement note 0021), so
+  `check` on the sample warns of nothing where it warned once per field of every card; and
+  a layer whose rows fold into one record of a table, or into the first record of a list
+  written as same-tagged records, gets a warning at its row from `check` (note 0022), with
+  `layer_effect` giving each entry's `folded` count. `explain` and `layer_effect` give a
+  row's values as a layer tool reports them in 0.8.0: one value as itself, several as an
+  Array. A tool command's Config binds the bound properties' tweaks, which 0.8.0 leaves to
+  the host; without it `check` saw no tweak and an exported game's `sim` played the
+  properties' defaults.
 - **The AI's opening is a plain list** (`(opening infantry infantry tank)` in
   `sample/data/skirmish.dta`), so a layer restates it whole or changes it with `#append`
   and `#drop`. As a list of `(build ...)` records it could not be retuned from a layer: a

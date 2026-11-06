@@ -76,4 +76,5 @@ and requirement note 0022 asks Baker's check and diff to report such a merge.
 
 Probably nothing new: the snapshot is built from what the runtime already reads. If a
 publish cannot be made cheap enough from outside Baker, that becomes a requirement note.
-Note 0021 (tweaks the data may leave out) is on Baker's main, for its next release.
+Notes 0021 (tweaks the data may leave out) and 0022 (a layer that folds a list) shipped in
+Baker 0.8.0, which the integration builds on since.

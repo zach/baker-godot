@@ -422,8 +422,10 @@ void BakerBinding::rebind() {
                 baker::CurveMode mode = baker::CurveMode::Monotone;
                 if (const auto* c = godot::Object::cast_to<godot::Curve>(held))
                     curve_points(*c, points, mode);
-                s->tweaked = std::make_unique<CurveTweak>(baker::Symbol(key), std::move(points),
-                                                          mode, baker::TweakMeta{});
+                baker::TweakMeta meta;
+                meta.optional = data_optional_;
+                s->tweaked =
+                    std::make_unique<CurveTweak>(baker::Symbol(key), std::move(points), mode, meta);
             } else if (!table.is_empty()) {
                 // The table's keys are the reference's allowed values.
                 const Array keys = BakerRuntime::get_singleton()->records(table).keys();
@@ -431,11 +433,13 @@ void BakerBinding::rebind() {
                     s->allowed->one_of.push_back(baker::Symbol(to_std(String(keys[k]))).str());
                 baker::TweakMeta meta;
                 meta.one_of = s->allowed->one_of;
+                meta.optional = data_optional_;
                 s->tweaked = make_tweak(baker::Symbol(key), current, meta);
                 s->table = table;
             } else {
-                s->tweaked =
-                    make_tweak(baker::Symbol(key), current, meta_of(infos[property], *s->allowed));
+                baker::TweakMeta meta = meta_of(infos[property], *s->allowed);
+                meta.optional = data_optional_;
+                s->tweaked = make_tweak(baker::Symbol(key), current, meta);
             }
             if (!s->tweaked) {
                 shared_tweaks().erase(key);

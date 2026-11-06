@@ -10,6 +10,7 @@
 #include <baker/std_interop.hpp>
 #include <baker/std_script.hpp>
 #include <baker/tools/layers.hpp>
+#include <baker/tweak.hpp>
 
 #include <godot_cpp/classes/dir_access.hpp>
 #include <godot_cpp/classes/engine.hpp>
@@ -431,7 +432,9 @@ void BakerRuntime::run_tool_command() {
     tool_defines_.assign(defines_.begin(), defines_.end());
     tool_hooks_.open.defines = tool_defines_;
     // The commands open a Config of their own, which binds the tweak registry, the bound
-    // properties' among them: close this one first.
+    // properties' among them (a command's Config binds none unless told): close this one
+    // first.
+    tool_hooks_.config.tweaks = &baker::TweakRegistry::global();
     live_.reset();
     context_.reset();
     if (line->command == "sim") {
@@ -921,11 +924,17 @@ godot::Error BakerRuntime::remove_layer(const String& name) {
 
 BakerBinding* BakerRuntime::bind_resource(const godot::Ref<godot::Resource>& resource,
                                           const Dictionary& bindings) {
+    return bind_resource_with(resource, bindings, false);
+}
+
+BakerBinding* BakerRuntime::bind_resource_with(const godot::Ref<godot::Resource>& resource,
+                                               const Dictionary& bindings, bool data_optional) {
     if (resource.is_null()) return nullptr;
     unbind_resource(resource);
     auto* binding = memnew(BakerBinding);
     binding->set_name("Resource" + String::num_int64(int64_t(resource->get_instance_id())));
     binding->set_target(resource.ptr());
+    binding->set_data_optional(data_optional);
     binding->set_bindings(bindings);
     add_child(binding);  // binds as it enters, as a node's binding does
     return binding;
@@ -1003,7 +1012,8 @@ int64_t BakerRuntime::bind_records(const String& prefix, const String& dir,
         Dictionary bindings;
         for (const String& property : grouped(*r.ptr(), group))
             bindings[property] = prefix + String(".") + String(keys[i]) + String(".") + property;
-        (void)bind_resource(r, bindings);
+        // The record's file holds its values; the data holds what a layer changes.
+        (void)bind_resource_with(r, bindings, true);
     }
     return keys.size();
 }
@@ -1148,7 +1158,7 @@ Array BakerRuntime::explain(const String& path) const {
         Dictionary d;
         put_source(d, e.source);
         d["layer"] = name_of(e.layer);
-        d["value"] = to_variant(e.value);
+        d["value"] = to_variant(e.values);
         d["standing"] = standing_name(e.standing);
         // The code's value of a record's property is its resource's.
         if (e.layer.str() == "code")
@@ -1255,8 +1265,9 @@ Array BakerRuntime::layer_effect(const String& layer) const {
         Dictionary d;
         put_source(d, e.source);
         d["path"] = name_of(e.path);
-        d["value"] = to_variant(e.value);
+        d["value"] = to_variant(e.values);
         d["below"] = e.below ? to_variant(*e.below) : Variant();
+        d["folded"] = int64_t(e.folded);
         d["shadowed"] = e.shadowed;
         out.push_back(d);
     }

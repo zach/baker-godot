@@ -39,6 +39,13 @@ Variant to_variant(const baker::Node& node) {
     }
 }
 
+Variant to_variant(const baker::RowValues& values) {
+    if (values.size() == 1) return to_variant(values[0]);
+    godot::Array out;
+    for (const baker::Node& n : values) out.push_back(to_variant(n));
+    return out;
+}
+
 namespace {
 
 template <class T>
