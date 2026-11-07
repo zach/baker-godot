@@ -3,6 +3,38 @@
 Releases of Baker for Godot, newest first. Versions follow [semantic
 versioning](https://semver.org); before 1.0.0, a minor version may change the API.
 
+## 0.4.0 - 2026-11-07
+
+Baker 0.8.0, with both of this integration's requirement notes shipped in it, and the
+evaluation's third round. Built on godot-cpp 10.0.0 (API 4.7), for Godot 4.7.2, on Linux
+and Windows; the C# API is the NuGet package `Baker.Godot`, attached to the release beside
+the addon. macOS stays paused in CI.
+
+- **Baker 0.8.0.** The integration builds on it; the sample's data needs no migration
+  (`baker_migrate --check` finds nothing). What it brings here: a record's tuning fields,
+  bound by `bind_records`, are tweaks the data may leave out (requirement note 0021), so
+  `check` on the sample warns of nothing where it warned once per field of every card; and
+  a layer whose rows fold into one record of a table, or into the first record of a list
+  written as same-tagged records, gets a warning at its row from `check` (note 0022), with
+  `layer_effect` giving each entry's `folded` count. `explain` and `layer_effect` give a
+  row's values as a layer tool reports them in 0.8.0: one value as itself, several as an
+  Array. A tool command's Config binds the bound properties' tweaks, which 0.8.0 leaves to
+  the host; without it `check` saw no tweak and an exported game's `sim` played the
+  properties' defaults.
+- **The AI's opening is a plain list** (`(opening infantry infantry tank)` in
+  `sample/data/skirmish.dta`), so a layer restates it whole or changes it with `#append`
+  and `#drop`. As a list of `(build ...)` records it could not be retuned from a layer: a
+  layer's restatement merged into the first record by its tag, silently. The README's note
+  on reading lists says which form to write, and the agent skill teaches tables and lists.
+- **The evaluation's third round on the skirmish** (`eval/README.md`): three tasks that
+  change a table's and a list's shape, not only a value, and records that reference records
+  (a fifth unit the AI must buy, an artillery in the opening, upgrades for the free cards),
+  judged by scenarios of the judge's own run over the data the agent left; run on both the
+  GDScript skirmish and its C# port: 12 of 18, the first task agents fail; rerun with the
+  skill saying to judge the AI by the matches the scenarios play, 1 of 6.
+- **Requirement note 0022:** a layer over a list written as same-tagged records merges
+  into the first record silently; the note asks Baker's check and diff to report it.
+
 ## 0.3.0 - 2026-10-31
 
 Phase 3: C#, on Godot 4.7. Built on Baker 0.7.0 and godot-cpp 10.0.0 (API 4.7), for Godot

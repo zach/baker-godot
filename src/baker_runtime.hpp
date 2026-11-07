@@ -130,6 +130,10 @@ public:
     class BakerBinding* bind_resource(const godot::Ref<godot::Resource>& resource,
                                       const godot::Dictionary& bindings);
     void unbind_resource(const godot::Ref<godot::Resource>& resource);
+    // The same, with the data allowed to leave the bound paths out (a record's values are
+    // its file's; check does not warn of the paths the data lacks).
+    class BakerBinding* bind_resource_with(const godot::Ref<godot::Resource>& resource,
+                                           const godot::Dictionary& bindings, bool data_optional);
     // Binds every resource in `dir` (.tres, .res) as a record of the table `prefix`: the
     // properties under its script's @export_group `group` (default "Tuning") bind to
     // "prefix.KEY.property", where KEY is the file's name, or the field `key` names. The

@@ -60,6 +60,11 @@ public:
     // it is the target.
     void set_target(godot::Object* target);
     [[nodiscard]] godot::Object* get_target() const;
+    // The data may leave these properties out: their values come from the target itself (a
+    // record's file), and a layer supplies one only to change it; check does not warn of
+    // the paths the data lacks. Baker.bind_records sets it; a scene's binding is not.
+    void set_data_optional(bool optional) { data_optional_ = optional; }
+    [[nodiscard]] bool get_data_optional() const { return data_optional_; }
     [[nodiscard]] godot::Dictionary get_bindings() const { return bindings_; }
     // {property: {path, bound, layer, file, line}}: where each property's value comes from.
     [[nodiscard]] godot::Dictionary sources() const;
@@ -90,6 +95,7 @@ private:
 
     godot::Dictionary bindings_;  // property -> path
     godot::Variant target_;       // set_target's, or nil: the parent
+    bool data_optional_ = false;  // set_data_optional's
     std::vector<std::unique_ptr<Use>> uses_;
     double since_capture_ = 0;
     static std::vector<BakerBinding*> live_;  // the bindings with bound properties

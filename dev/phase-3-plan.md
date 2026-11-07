@@ -63,8 +63,18 @@ the package (step 2); `export.sh` exports the C# sample with the .NET templates 
 the evaluation's six skirmish tasks rerun on the port give 18 of 18 ($2.54), the agents'
 fixes those of the GDScript round, with `--skirmish cs` in every command. Phase 3 is done.
 
+**After the release, a third round of the evaluation** (`eval/README.md`): three tasks
+that change a table's and a list's shape through the data the C# match reads whole from its
+snapshot, run on both ports. 12 of 18: `new-unit` fails every run, the agents weighing the
+economy's pacing over the purchase and judging the purchase by probe matches longer than
+the ones the objectives play; with the skill saying to judge by the matches the scenarios
+play, 1 of 6, the reports now naming the rate and choosing the pacing. The round found the
+sample's opening unlayerable as a list of `(build ...)` records; it is a plain list now,
+and requirement note 0022 asks Baker's check and diff to report such a merge.
+
 ## With Baker
 
 Probably nothing new: the snapshot is built from what the runtime already reads. If a
 publish cannot be made cheap enough from outside Baker, that becomes a requirement note.
-Note 0021 (tweaks the data may leave out) is on Baker's main, for its next release.
+Notes 0021 (tweaks the data may leave out) and 0022 (a layer that folds a list) shipped in
+Baker 0.8.0, which the integration builds on since.

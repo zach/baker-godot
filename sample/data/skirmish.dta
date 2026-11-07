@@ -40,9 +40,11 @@
 (cards
    (fireball (cost 2)))
 
-; The AI's opening: what it builds first, in order.
+; The AI's opening: what it builds first, in order. A plain list, so a layer restates it
+; whole, (opening infantry artillery tank), or extends it, (opening #append heli); a list of
+; (build ...) arrays would merge by their one tag.
 (ai
-   (opening (build infantry) (build infantry) (build tank))
+   (opening infantry infantry tank)
    ; After the opening, each turn: one of what it can afford, or nothing (save), drawn by
    ; its seed with these weights.
    (weights (infantry 4) (tank 2) (artillery 1) (heli 1) (barracks 1) (tower 1) (save 3)))

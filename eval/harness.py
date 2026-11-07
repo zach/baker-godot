@@ -9,8 +9,9 @@ the result by the game, not by the agent.
 A run succeeds if, afterwards: every file but data/agent.dta (and run output) is byte for
 byte as planted; `--baker check` exits 0; `--baker sim` exits 0 over the task's seeds (1-3;
 the skirmish's 1-5) and scenarios (the skirmish's: all but the platformer's `reach`); and
-the task's own condition holds, which may read the agent's report. Recorded per run: success and its parts, turns, tool calls, tokens,
-cost, wall time.
+the task's own condition holds, which may read the agent's report, or run a scenario of
+the judge's own over the data the agent left. Recorded per run: success and its parts,
+turns, tool calls, tokens, cost, wall time.
 """
 import argparse
 import concurrent.futures as cf
@@ -59,30 +60,96 @@ def plant_all(*plants):
 
 
 def evaluate(sample, godot, commands):
-    """Each command's value in the data as planted and changed: {config...} or a rule."""
+    """Each command's value in the data as planted and changed: {config...} or a rule; None
+    for a command that failed (a path the data lacks)."""
     out = Path(tempfile.mkdtemp()) / "eval.json"
     run_godot(godot, sample, ["--baker", "eval", "--baker-json", *commands,
                               "--baker-output", str(out)])
-    return [json.loads(line)["value"] for line in out.read_text().splitlines() if line.strip()]
+    return [json.loads(line).get("value") for line in out.read_text().splitlines() if line.strip()]
 
 
 def cards(sample, godot):
-    """Every card's cost and damage as the game reads them: {name: (cost, damage)}."""
+    """Every card's cost, damage and upgrade as the game reads them:
+    {name: (cost, damage, upgrade)}, the upgrade a card's name or ''."""
     out = Path(tempfile.mkdtemp()) / "tweaks.csv"
     run_godot(godot, sample, ["--baker", "csv", "--baker-output", str(out)])
     rows = {r["path"]: r["value"] for r in csv.DictReader(out.open(encoding="utf-8"))}
     names = {p.split(".")[1] for p in rows if p.startswith("cards.")}
-    return {n: (float(rows[f"cards.{n}.cost"]), float(rows[f"cards.{n}.damage"])) for n in names}
+    return {n: (float(rows[f"cards.{n}.cost"]), float(rows[f"cards.{n}.damage"]),
+                rows[f"cards.{n}.upgrade"].strip("'")) for n in names}
 
 
 def cards_fixed(sample, godot, planted, report):
     """No cost changed; a card of cost 3 or more deals 4 a point or more; the rest as they were."""
     now = cards(sample, godot)
-    for name, (cost, damage) in planted.items():
-        c, d = now[name]
+    for name, (cost, damage, _) in planted.items():
+        c, d, _ = now[name]
         if c != cost or (d < 4 * cost if cost >= 3 else d != damage):
             return False
     return True
+
+
+def free_cards_upgraded(sample, godot, planted, report):
+    """Each free card upgrades into a card of cost 1; no other card's upgrade, and no card's
+    cost or damage, changed."""
+    now = cards(sample, godot)
+    ones = {n for n, (c, _, _) in planted.items() if c == 1}
+    for name, (cost, damage, upgrade) in planted.items():
+        c, d, u = now[name]
+        if (c, d) != (cost, damage):
+            return False
+        if (u not in ones) if cost == 0 else (u != upgrade):
+            return False
+    return True
+
+
+def judge(sample, godot, scenario, seeds):
+    """A scenario of the judge's own, with its objectives, run over the data as the agent
+    left it: its runs (baker.sim/1.3). Written after the planted files were compared."""
+    path = sample / "sim/scenarios/judge.dta"
+    path.write_text(scenario)
+    out = Path(tempfile.mkdtemp())
+    try:
+        run_godot(godot, sample, ["--baker", "sim", "--baker-scenario", "judge", "--baker-seeds",
+                                  seeds, "--baker-results", str(out)], timeout=600)
+    finally:
+        path.unlink()
+    return json.load((out / "results.json").open())["runs"]
+
+
+MECH_BOUGHT = """(scenario judge (desc "A match, until blue's army is ready")
+   (steps 12)
+   (at step 0 {skirmish.start $seed})
+   (until {skirmish.outcome})
+   (objectives judge.mech_bought))
+(objective judge.mech_bought (desc "Blue built a mech")
+   (measure {skirmish.built_at mech})
+   (pass {< $value 99}))
+"""
+
+ARTILLERY_FIRST = """(scenario judge (desc "A match, until blue builds its tank")
+   (steps 12)
+   (at step 0 {skirmish.start $seed})
+   (until {< {skirmish.built_at tank} 99})
+   (objectives judge.artillery_first))
+(objective judge.artillery_first (desc "Blue built an artillery by the turn it built its tank")
+   (measure {skirmish.built_at artillery})
+   (pass {< $value 99}))
+"""
+
+
+def mech_added(sample, godot, planted, report):
+    """A mech tougher and slower than a tank is in the unit table, and blue buys one in at
+    least one of ten matches."""
+    hp, move = evaluate(sample, godot, ["{config.get units.mech.hp}", "{config.get units.mech.move}"])
+    if hp is None or move is None or not (hp > 10 and move < 6):
+        return False
+    return any(r["passed"] for r in judge(sample, godot, MECH_BOUGHT, "1-10"))
+
+
+def artillery_second(sample, godot, planted, report):
+    """Blue has built an artillery by the turn it builds its tank, in every match."""
+    return all(r["passed"] for r in judge(sample, godot, ARTILLERY_FIRST, "1-5"))
 
 
 def fall_gravity(sample, godot):
@@ -173,6 +240,37 @@ TASKS = {
                      "costs, and leave the cheaper cards alone.",
         "snapshot": cards,
         "condition": cards_fixed,
+        "scenarios": SKIRMISH,
+        "seeds": "1-5",
+    },
+    # The round on the C# port: a table and a list the match reads whole from a published
+    # snapshot, changed in shape and not only in value; records that reference records.
+    "new-unit": {
+        "plant": None,
+        "complaint": "We want a fifth unit in the skirmish, the mech: more hit points than a "
+                     "tank but slower, priced near a tank, and the AI should actually buy "
+                     "one now and then after its opening. Keep the economy's pacing where "
+                     "it is.",
+        "condition": mech_added,
+        "scenarios": SKIRMISH,
+        "seeds": "1-5",
+    },
+    "open-artillery": {
+        "plant": None,
+        "complaint": "Change the AI's opening so it builds an artillery second, between the "
+                     "first infantry and the tank. The tank should still land on the turn "
+                     "it lands now, and the army should be ready when it is now.",
+        "condition": artillery_second,
+        "scenarios": SKIRMISH,
+        "seeds": "1-5",
+    },
+    "free-upgrades": {
+        "plant": None,
+        "complaint": "The free cards, the ones that cost 0, are dead ends. Give each of them "
+                     "an upgrade into a card that costs 1. Don't touch any other card, and "
+                     "don't change what any card costs.",
+        "snapshot": cards,
+        "condition": free_cards_upgraded,
         "scenarios": SKIRMISH,
         "seeds": "1-5",
     },

@@ -8,6 +8,7 @@
 // BakerBinding's property is a Tweak<T> of its own type.
 
 #include <baker/array.hpp>
+#include <baker/config.hpp>
 #include <baker/curve.hpp>
 
 #include <godot_cpp/classes/curve.hpp>
@@ -93,6 +94,8 @@ struct RawValues {
 
 // One node as a Variant: numbers, symbols (as StringName), strings, arrays (as Array).
 [[nodiscard]] godot::Variant to_variant(const baker::Node& node);
+// A row's values as a layer tool reports them: one value as itself, several as an Array.
+[[nodiscard]] godot::Variant to_variant(const baker::RowValues& values);
 // `values` read as `type`, if they convert; nil otherwise. NIL: any type, by the values:
 // one node is its own value, several are an Array. DICTIONARY and ARRAY read as to_table
 // does: a table, or a list (of values, or of records; one value is a list of one).

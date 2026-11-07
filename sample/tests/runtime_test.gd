@@ -155,7 +155,7 @@ func run() -> void:
 	check(Baker.get_value("buildings.hq", {}) == {"income": 20, "capture": 1000},
 		"one record by its path")
 	check(SkirmishCatalog.opening() == [&"infantry", &"infantry", &"tank"],
-		"a list of records, all of one tag, is an Array of them: %s" % [SkirmishCatalog.opening()])
+		"a list is an Array of its values: %s" % [SkirmishCatalog.opening()])
 	check(SkirmishCatalog.affordable(50) == ["infantry", "tank"],
 		"the production menu reads the table whole: %s" % [SkirmishCatalog.affordable(50)])
 	check(Baker.get_value("units.tank.hp", {}) == {}, "a value that is not a table gives the fallback")

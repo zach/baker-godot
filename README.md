@@ -4,7 +4,7 @@ An integration of [Baker](https://github.com/zach/baker) with [Godot](https://go
 tuning data in layers (`default`, `local`, `agent`, experiments), each value knowing where
 it came from, and values tuned while playing written back to their line in the data.
 
-Version 0.3.0 (`CHANGELOG.md`), on Baker 0.7.0 and Godot 4.7.2, for Linux and Windows: the
+Version 0.4.0 (`CHANGELOG.md`), on Baker 0.8.0 and Godot 4.7.2, for Linux and Windows: the
 runtime, the editor loop, agents and exports (phase 1); what a game shaped like a real one
 needs (phase 2): bindings at scale, tables, runtime layers and records, lockstep, rules in
 script, turn scenarios, the dock's data view, and a harder evaluation; and C# (phase 3):
@@ -84,7 +84,8 @@ the remote inspector sends, and checks the diff.
   "res://skirmish/cards")` binds every resource in the directory, the properties under its
   script's `@export_group("Tuning")` (or the group `{"group": ...}` names) to
   `cards.<file>.<property>` (or the field `{"key": ...}` names). The data holds only what a
-  layer changes; the file is the bottom of the chain, and `explain()` names it. A property
+  layer changes, and `check` does not warn of a record's values the data leaves out (they
+  are the file's); the file is the bottom of the chain, and `explain()` names it. A property
   that references a resource of a class bound as records is the record's name in the data,
   checked against the table's names; a `Curve` is its points, `(scaling (1 1) (3 2))`, and
   Godot samples it as Baker does. `record(prefix, key)` and `records(prefix)` give the
@@ -109,8 +110,11 @@ the remote inspector sends, and checks the diff.
   translation key (`(name CARD_FIREBALL)`), and the game passes the key to `tr()`.
 - **Tables, read whole.** With a Dictionary fallback, `Baker.get_value("units", {})` is a
   keyed table as a Dictionary of records, `{"tank": {"hp": 10, "price": 50, ...}, ...}`; with
-  an Array fallback, a list of records with one tag is an Array of them
-  (`(opening (build infantry) (build tank))` at `ai.opening` is `[&"infantry", &"tank"]`).
+  an Array fallback, a list is an Array of its values (`(opening infantry tank)` at
+  `ai.opening` is `[&"infantry", &"tank"]`), and a list of records with one tag an Array of
+  them. Write a list a layer may retune as plain values: a layer restates it whole or
+  changes it with `#append` and `#drop`, where same-tagged records merge by their tag, and
+  `check` warns at a layer's row that folds into one.
   Metadata after a value, `(@range 0 10)` or `(@desc "...")`, is left out; any other name,
   `kind` or `range` too, is a field. Shapes in the data hold the tables to their fields
   (`sample/data/skirmish.dta`). `set_value("units.tank", {"price": 45})` sets each field it
@@ -263,7 +267,7 @@ the draft creates its tag.
 
 ## Building
 
-CMake fetches godot-cpp (10.0.0, for Godot 4.7) and Baker 0.7.0 (its core, its host kit and its tools), and puts the library in
+CMake fetches godot-cpp (10.0.0, for Godot 4.7) and Baker 0.8.0 (its core, its host kit and its tools), and puts the library in
 `sample/addons/baker/bin/`:
 
 ```sh
@@ -333,7 +337,7 @@ long hp = (long)now.Get(units)["tank"]["hp"];
    load text. (An MCP bridge, plan A, was built and evaluated in baker-mcp; the command
    line and skill needed fewer calls for the same success, so this repository drops it.)
 4. **Requirements back to Baker** (done), as notes in `requirements/`: 0001 to 0020 shipped
-   in Baker and are in use here; 0021 is built on Baker's main, for its next release.
+   in Baker and are in use here, 0021 and 0022 since Baker 0.8.0.
 5. **Phase 2** (done, `dev/phase-2-plan.md`): the skirmish sample, steps 1 to 8.
 6. **Phase 3** (done, `dev/phase-3-plan.md`): Godot 4.7, the C# package on NuGet, values a
    threaded simulation reads, and the skirmish ported to C#, giving the GDScript's results.
