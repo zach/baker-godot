@@ -3,7 +3,12 @@
 Releases of Baker for Godot, newest first. Versions follow [semantic
 versioning](https://semver.org); before 1.0.0, a minor version may change the API.
 
-## Unreleased
+## 0.4.0 - 2026-11-07
+
+Baker 0.8.0, with both of this integration's requirement notes shipped in it, and the
+evaluation's third round. Built on godot-cpp 10.0.0 (API 4.7), for Godot 4.7.2, on Linux
+and Windows; the C# API is the NuGet package `Baker.Godot`, attached to the release beside
+the addon. macOS stays paused in CI.
 
 - **Baker 0.8.0.** The integration builds on it; the sample's data needs no migration
   (`baker_migrate --check` finds nothing). What it brings here: a record's tuning fields,

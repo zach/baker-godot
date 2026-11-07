@@ -4,7 +4,7 @@ An integration of [Baker](https://github.com/zach/baker) with [Godot](https://go
 tuning data in layers (`default`, `local`, `agent`, experiments), each value knowing where
 it came from, and values tuned while playing written back to their line in the data.
 
-Version 0.3.0 (`CHANGELOG.md`), on Baker 0.8.0 and Godot 4.7.2, for Linux and Windows: the
+Version 0.4.0 (`CHANGELOG.md`), on Baker 0.8.0 and Godot 4.7.2, for Linux and Windows: the
 runtime, the editor loop, agents and exports (phase 1); what a game shaped like a real one
 needs (phase 2): bindings at scale, tables, runtime layers and records, lockstep, rules in
 script, turn scenarios, the dock's data view, and a harder evaluation; and C# (phase 3):
