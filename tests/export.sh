@@ -24,6 +24,19 @@ printf '(player (jump (height 300)))\n' > "$work/project/data/agent.dta"
 # A dedicated server build: the feature tag `server`, which the project setting
 # baker/feature_defines makes a define, so data/server.dta's (when server) layer is in.
 sed -i.bak 's/^custom_features=""/custom_features="server"/' "$work/project/export_presets.cfg"
+# A probe in the copy only: with `-- --rule-probe` the game calls the data's damage rule from
+# its own Baker, as game code does, and quits 0 on the data's answer. The rule reads
+# config.get, which a shipping build binds itself.
+cat > "$work/project/rule_probe.gd" <<'GD'
+extends Node
+func _ready() -> void:
+	if not OS.get_cmdline_user_args().has("--rule-probe"):
+		return
+	var hit: Variant = Baker.call_function("skirmish.damage", [6, 2, 0])
+	print("rule-probe: ", hit)
+	get_tree().quit(0 if hit == 4 else 1)
+GD
+sed -i.bak 's|^Baker="\*res://addons/baker/baker.gd"$|&\nRuleProbe="*res://rule_probe.gd"|' "$work/project/project.godot"
 "$godot" --headless --path "$work/project" --import >/dev/null 2>&1 || true
 "$godot" --headless --path "$work/project" --import >/dev/null 2>&1
 mkdir -p "$work/out"
@@ -60,6 +73,10 @@ d = json.load(open(sys.argv[1]))
 assert d["runs"][0]["objectives"][0]["value"] == 30, d
 PY
 check $? "  a server build (its feature tag) reads its own layer: a turn of 30 s"
+timeout 60 "$game" --headless --fixed-fps 60 -- --baker sim --baker-scenario duel >/dev/null 2>&1
+check $? "  the data's rules run in a shipping build's sim: the duel"
+timeout 60 "$game" --headless -- --rule-probe >/dev/null 2>&1
+check $? "  and in the game itself: the damage rule, which reads config.get"
 timeout 60 "$game" --headless -- --baker check >/dev/null 2>&1; [ $? -eq 2 ]
 check $? "  a shipping build: it runs sim and compare, and refuses check"
 pck="${game%.*}.pck"  # the export plugin leaves dev_only layers' files out of the package

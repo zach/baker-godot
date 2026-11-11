@@ -9,6 +9,7 @@
 #include <baker/project.hpp>
 #include <baker/std_interop.hpp>
 #include <baker/std_script.hpp>
+#include <baker/tools/console.hpp>
 #include <baker/tools/layers.hpp>
 #include <baker/tweak.hpp>
 
@@ -278,6 +279,13 @@ godot::Error BakerRuntime::open(const String& project_path) {
         live_.reset();
         context_.reset();
         return fail(r.error());
+    }
+    if constexpr (baker::kShipping) {
+        // A shipping Live binds no config.* commands, and the data's rules call config.get
+        // when the game calls them; #autorun only defines them, so binding them now is in
+        // time. Development builds have them from Live, with write access as asked.
+        if (auto r = baker::tools::bind_config_tools(*context_, live_->config()); !r)
+            return fail(r.error());
     }
     return godot::OK;
 }
@@ -1264,7 +1272,7 @@ Array BakerRuntime::layer_effect(const String& layer) const {
     for (const baker::LayerEffectEntry& e : *entries) {
         Dictionary d;
         put_source(d, e.source);
-        d["path"] = name_of(e.path);
+        d["path"] = e.path ? to_godot(e.path->view()) : String();
         d["value"] = to_variant(e.values);
         d["below"] = e.below ? to_variant(*e.below) : Variant();
         d["folded"] = int64_t(e.folded);

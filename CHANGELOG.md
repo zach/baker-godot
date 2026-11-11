@@ -3,6 +3,16 @@
 Releases of Baker for Godot, newest first. Versions follow [semantic
 versioning](https://semver.org); before 1.0.0, a minor version may change the API.
 
+## Unreleased
+
+- **Baker 0.9.0.** The integration builds on it; the sample's data needs no migration, and
+  it bakes no stack image or views, which 0.9.0 asks to regenerate. A shipping build's
+  runtime binds Baker's `config.*` script commands itself, which 0.9.0 no longer does for
+  it: the sample's damage rule reads `config.get rules.level_bonus`, and without them an
+  exported game's rules failed ("'config.get' is not a function"). `tests/export.sh` now
+  calls the rule from an exported game, and runs the duel scenario there.
+  `layer_effect`'s paths follow 0.9.0's type.
+
 ## 0.4.0 - 2026-11-07
 
 Baker 0.8.0, with both of this integration's requirement notes shipped in it, and the
